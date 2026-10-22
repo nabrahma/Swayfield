@@ -1,0 +1,63 @@
+site_name: Swayfield
+site_description: One-click animated grass for Blender, with art-directable wind.
+site_url: https://nabrahma.github.io/Swayfield/
+repo_url: https://github.com/nabrahma/Swayfield
+repo_name: nabrahma/Swayfield
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Nabaskar Brahma. GPL-3.0-or-later.
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.action.edit
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quick start: getting-started/quick-start.md
+  - Guide:
+      - Layers: guide/layers.md
+      - Scattering: guide/scattering.md
+      - Painting and masks: guide/painting-and-masks.md
+      - Wind: guide/wind.md
+      - Effectors: guide/effectors.md
+      - Materials: guide/materials.md
+      - Performance: guide/performance.md
+      - Presets: guide/presets.md
+  - Reference:
+      - Settings: reference/settings.md
+  - FAQ: faq.md
+  - Troubleshooting: troubleshooting.md
+  - Roadmap: roadmap.md
+  - Development:
+      - Contributing: contributing.md
+      - Architecture: architecture.md
+      - Product requirements: design/PRD.md
