@@ -20,7 +20,7 @@ def _clear_data_keep_nodes() -> None:
         for block in list(collection):
             collection.remove(block)
     for group in list(bpy.data.node_groups):
-        if group.name not in keep:
+        if group.name not in keep and "sf_part" not in group:
             bpy.data.node_groups.remove(group)
     for coll in list(bpy.data.collections):
         bpy.data.collections.remove(coll)
