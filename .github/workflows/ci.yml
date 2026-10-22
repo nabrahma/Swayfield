@@ -33,9 +33,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - blender: "4.2"
-            full: "4.2.23"
-            series: "Blender4.2"
+          - blender: "4.5"
+            full: "4.5.15"
+            series: "Blender4.5"
           - blender: "5.2"
             full: "5.2.3"
             series: "Blender5.2"
