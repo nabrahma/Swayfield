@@ -68,7 +68,7 @@ jobs:
           open("release_notes.md", "w", encoding="utf-8").write(notes + "\n")
           print(notes)
           PY
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           body_path: release_notes.md
           files: dist/*.zip
