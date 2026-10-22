@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install "mkdocs-material>=9.5,<10"
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - run: mkdocs build --site-dir site
       - uses: actions/upload-pages-artifact@v3
         with:
