@@ -1,0 +1,27 @@
+# Tooling-only metadata (lint, tests). The add-on itself ships via
+# swayfield/blender_manifest.toml; keep the version below in sync with it.
+[project]
+name = "swayfield"
+version = "0.1.0"
+description = "One-click animated grass with art-directable wind for Blender (Geometry Nodes)"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".blender-deps", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-third-party = ["bpy", "mathutils", "bmesh", "gpu", "bpy_extras"]
+known-first-party = ["swayfield"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+"tools/**" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
