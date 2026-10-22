@@ -11,13 +11,13 @@ from ..core import budget, drivers, layers, node_setup, versioning
 #: Seed offset between layers on one object, so layers do not share root positions.
 LAYER_SEED_STEP = 4999
 
-_NOT_SYNCED = frozenset({"seed_offset", "material", "preview_material", *drivers.DRIVEN_KEYS})
+_NOT_SYNCED = frozenset({"seed_offset", "surface", "material", "preview_material", *drivers.DRIVEN_KEYS})
 _PAINT_GROUPS = frozenset(f"{key}_group" for key in ("density", "length", "wind", "variation"))
 
 
 def _mesh_ob(operator, context):
-    ob = context.active_object
-    if ob is None or ob.type != "MESH":
+    ob = layers.target_mesh(context)
+    if ob is None:
         operator.report({"ERROR"}, "Select a mesh object first")
         return None
     return ob
@@ -44,8 +44,7 @@ class SWAYFIELD_OT_layer_add(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        ob = context.active_object
-        if ob is None or ob.type != "MESH":
+        if layers.target_mesh(context) is None:
             cls.poll_message_set("Select a mesh object first")
             return False
         return True
@@ -90,8 +89,7 @@ class SWAYFIELD_OT_layer_remove(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        ob = context.active_object
-        if ob is None or ob.type != "MESH" or layers.active_layer(ob) is None:
+        if layers.active_target(context) is None:
             cls.poll_message_set("Select an object with a grass layer first")
             return False
         return True
@@ -109,7 +107,7 @@ class SWAYFIELD_OT_layer_remove(bpy.types.Operator):
 class SWAYFIELD_OT_layer_move(bpy.types.Operator):
     bl_idname = "swayfield.layer_move"
     bl_label = "Move Layer"
-    bl_description = "Move the active layer up or down in the list and in the modifier stack"
+    bl_description = "Move the active layer up or down in the list"
     bl_options = {"REGISTER", "UNDO"}
 
     direction: EnumProperty(name="Direction", description="Where to move the layer",
@@ -124,16 +122,13 @@ class SWAYFIELD_OT_layer_move(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        ob, layer, mod = layers.active_target(context)
+        ob, layer, _mod = layers.active_target(context)
         settings = ob.swayfield
         index = layers.layer_index(ob, layer)
         other_index = index + (-1 if self.direction == "UP" else 1)
         if not 0 <= other_index < len(settings.layers):
             self.report({"INFO"}, "The layer is already at the " + ("top" if self.direction == "UP" else "bottom"))
             return {"CANCELLED"}
-        other_mod = layers.get_modifier(ob, settings.layers[other_index])
-        if other_mod is not None:
-            node_setup.move_modifier(ob, mod, list(ob.modifiers).index(other_mod))
         settings.layers.move(index, other_index)
         settings.active_layer_index = other_index
         return {"FINISHED"}
@@ -149,8 +144,7 @@ class SWAYFIELD_OT_layer_solo(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        ob = context.active_object
-        if ob is None or ob.type != "MESH" or layers.active_layer(ob) is None:
+        if layers.active_target(context) is None:
             cls.poll_message_set("Select an object with a grass layer first")
             return False
         return True

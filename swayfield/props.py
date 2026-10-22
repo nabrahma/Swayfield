@@ -24,10 +24,8 @@ _FALLBACK_MODE_ITEMS = (
 
 
 def _modifier_of(layer) -> "bpy.types.Modifier | None":
-    ob = layer.id_data
-    if not isinstance(ob, bpy.types.Object):
-        return None
-    return ob.modifiers.get(layer.modifier_name)
+    grass = layer.grass_object
+    return grass.modifiers.get(layer.modifier_name) if grass is not None else None
 
 
 def _modifier_enum(item: spec.Input):
@@ -96,7 +94,9 @@ def _layer_material(layer) -> "bpy.types.Material | None":
 
 class SF_Layer(bpy.types.PropertyGroup):
     name: StringProperty(name="Name", description="Name of this grass layer", default="Grass")
-    modifier_name: StringProperty(name="Modifier", description="Name of the layer's Geometry Nodes modifier")
+    grass_object: PointerProperty(type=bpy.types.Object, name="Grass Object",
+                                  description="The hair Curves object that grows this layer's grass")
+    modifier_name: StringProperty(name="Modifier", description="Name of the layer's modifier on its grass object")
     preset: StringProperty(name="Preset", description="Grass preset this layer started from, or CUSTOM",
                            default="CUSTOM")
     wind_preset: StringProperty(name="Wind Type", description="Wind type this layer started from, or CUSTOM",

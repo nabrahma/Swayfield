@@ -80,30 +80,33 @@ def _legacy_blades(ob: bpy.types.Object, depsgraph: bpy.types.Depsgraph) -> int:
     return total
 
 
-def _object_total(ob: bpy.types.Object, depsgraph: bpy.types.Depsgraph | None = None) -> int:
-    """Blades in the evaluated viewport geometry of ``ob``, across all its layers. Cached."""
+def _grass_total(grass: bpy.types.Object, depsgraph: bpy.types.Depsgraph | None = None) -> int:
+    """Blades in the evaluated viewport geometry of one grass object. Cached."""
     frame = bpy.context.scene.frame_current
-    key = (ob.name_full, frame)
+    key = (grass.name_full, frame)
     now = time.monotonic()
     cached = _object_cache.get(key)
     if cached is not None and now - cached[0] < _CACHE_SECONDS:
         return cached[1]
     depsgraph = depsgraph or bpy.context.evaluated_depsgraph_get()
-    ob_eval = ob.evaluated_get(depsgraph)
-    mods = [m for m in layers.swayfield_modifiers(ob) if m.show_viewport]
+    grass_eval = grass.evaluated_get(depsgraph)
     ribbons = False
     blade_points = 8
-    for mod in mods:
+    base_verts = 0
+    for mod in layers.swayfield_modifiers(grass):
         try:
             ribbons = ribbons or compat.get_input(mod, "blade_source") == 1
             blade_points = int(compat.get_input(mod, "blade_points"))
+            if compat.get_input(mod, "mask_preview"):
+                surface = compat.get_input(mod, "surface")
+                base_verts = len(surface.data.vertices) if surface is not None else 0
         except KeyError:
             pass
     try:
-        if hasattr(ob_eval, "evaluated_geometry"):
-            total = _geometry_blades(ob_eval, ribbons, blade_points, len(ob.data.vertices))
+        if hasattr(grass_eval, "evaluated_geometry"):
+            total = _geometry_blades(grass_eval, ribbons, blade_points, base_verts)
         else:
-            total = _legacy_blades(ob, depsgraph)
+            total = _legacy_blades(grass, depsgraph)
     except (RuntimeError, ReferenceError, AttributeError):
         total = 0
     _object_cache[key] = (now, total)
@@ -122,30 +125,18 @@ def viewport_fraction(mod: bpy.types.Modifier) -> float:
     return min(max(fraction, 0.0), 1.0)
 
 
-def _layer_weight(ob: bpy.types.Object, mod: bpy.types.Modifier) -> float:
-    """Relative size of one layer, used to split an object's total between its layers."""
-    try:
-        density = float(compat.get_input(mod, "density"))
-    except KeyError:
-        density = 1.0
-    return max(estimate_from_area(ob, density) * viewport_fraction(mod), 1e-9)
-
-
 def count_blades(ob: bpy.types.Object, mod: bpy.types.Modifier) -> int:
     """Blades the viewport currently shows for the layer ``mod``.
 
-    Counted from the evaluated geometry. Evaluated geometry cannot tell layers
-    apart, so an object with several layers splits the counted total by each
-    layer's expected share.
+    Counted from the evaluated geometry of the layer's own grass object, so layers
+    are counted separately. ``ob`` (the surface) is accepted for call-site symmetry.
     """
     if not mod.show_viewport:
         return 0
-    total = _object_total(ob)
-    active = [m for m in layers.swayfield_modifiers(ob) if m.show_viewport]
-    if len(active) <= 1:
-        return total
-    weights = {m.name: _layer_weight(ob, m) for m in active}
-    return int(round(total * weights.get(mod.name, 0.0) / sum(weights.values())))
+    grass = mod.id_data
+    if grass.hide_viewport:
+        return 0
+    return _grass_total(grass)
 
 
 def estimate_render_count(ob: bpy.types.Object, mod: bpy.types.Modifier) -> int:
@@ -157,7 +148,8 @@ def estimate_render_count(ob: bpy.types.Object, mod: bpy.types.Modifier) -> int:
     if fraction > 0.0 and viewport > 0:
         return int(round(viewport / fraction))
     try:
-        return int(estimate_from_area(ob, float(compat.get_input(mod, "density"))))
+        surface = compat.get_input(mod, "surface") or ob
+        return int(estimate_from_area(surface, float(compat.get_input(mod, "density"))))
     except KeyError:
         return 0
 
@@ -210,11 +202,12 @@ def scene_totals(context: bpy.types.Context) -> Totals:
     """Viewport and estimated render blades across every Swayfield layer in the scene."""
     viewport = render = 0
     for ob in context.scene.objects:
-        if ob.type != "MESH":
+        if ob.type != "CURVES" or not layers.is_grass_object(ob):
             continue
         for mod in layers.swayfield_modifiers(ob):
-            viewport += count_blades(ob, mod)
-            render += estimate_render_count(ob, mod)
+            surface = ob.parent
+            viewport += count_blades(surface, mod)
+            render += estimate_render_count(surface, mod)
     return Totals(viewport, render)
 
 

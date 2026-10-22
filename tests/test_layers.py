@@ -3,8 +3,38 @@
 
 import bpy
 import pytest
+from mathutils import Matrix
 
 from swayfield.core import budget, compat, layers, node_setup, nodes, spec, versioning
+
+
+def _clear_data_keep_nodes() -> None:
+    """Like conftest's cleanup, but keeps the built Swayfield node groups: building them takes seconds."""
+    from swayfield.core import nodes
+
+    keep = {nodes.group_name(stage) for stage in nodes.STAGES}
+    for collection in (bpy.data.objects, bpy.data.meshes, bpy.data.curves, bpy.data.hair_curves,
+                       bpy.data.materials, bpy.data.cameras, bpy.data.lights, bpy.data.images,
+                       bpy.data.worlds):
+        for block in list(collection):
+            collection.remove(block)
+    for group in list(bpy.data.node_groups):
+        if group.name not in keep:
+            bpy.data.node_groups.remove(group)
+    for coll in list(bpy.data.collections):
+        bpy.data.collections.remove(coll)
+
+
+@pytest.fixture
+def scene():
+    """An empty scene at frame 1 (replaces the conftest fixture to keep the node groups between tests)."""
+    _clear_data_keep_nodes()
+    sc = bpy.context.scene
+    sc.camera = None
+    sc.frame_set(1)
+    yield sc
+    _clear_data_keep_nodes()
+
 
 
 def _presets():
@@ -33,23 +63,80 @@ def _make_v0_group():
 # create / remove / duplicate
 # ---------------------------------------------------------------------------
 
+def _grass(layer):
+    return layer.grass_object
+
+
 def test_create_layer_sets_up_everything(plane):
     layer, mod = node_setup.create_layer(plane, "Base Grass", seed_offset=9973, link_id="abc")
+    grass = _grass(layer)
     assert layers.is_swayfield_modifier(mod)
     assert mod.name == "Swayfield Base Grass"
-    assert list(plane.modifiers)[-1] == mod
+    assert mod.id_data == grass
+    assert not plane.modifiers, "the surface itself is untouched"
+    assert list(grass.modifiers) == [mod]
     assert layer.name == "Base Grass" and layer.modifier_name == mod.name
     assert layer.link_id == "abc" and layer.preset == "CUSTOM"
     assert plane.swayfield.active_layer_index == 0
     assert layers.active_layer(plane).name == "Base Grass"
     assert layers.get_modifier(plane, layer) == mod
     assert compat.get_input(mod, "seed_offset") == 9973
+    assert compat.get_input(mod, "surface") == plane
 
+
+def test_grass_object_is_a_hair_curves_object_following_the_surface(plane):
+    layer, mod = node_setup.create_layer(plane, "Base Grass")
+    grass = _grass(layer)
+    assert grass.name == "SF_Ground_Base Grass"
+    assert grass.type == "CURVES" and isinstance(grass.data, bpy.types.Curves)
+    assert grass.parent == plane
+    assert tuple(grass.location) == (0.0, 0.0, 0.0) and tuple(grass.rotation_euler) == (0.0, 0.0, 0.0)
+    assert tuple(grass.scale) == (1.0, 1.0, 1.0)
+    assert grass.matrix_parent_inverse == Matrix.Identity(4)
+    assert grass.hide_select, "clicking the terrain must not pick the grass"
+    assert grass["sf_grass"]
+    assert set(grass.users_collection) == set(plane.users_collection)
+    assert layers.is_grass_object(grass) and not layers.is_grass_object(plane)
+
+
+def test_layer_material_is_in_the_grass_material_slots(plane):
+    layer, mod = node_setup.create_layer(plane, "Base Grass")
     mat = layers.layer_material(plane, layer)
     assert mat is not None and mat.name == "SF_Ground_Base Grass"
+    assert [slot.material for slot in _grass(layer).material_slots] == [mat]
     effectors = compat.get_input(mod, "effector_collection")
     assert effectors is not None and effectors.name == "SF_Effectors"
     assert effectors.name in bpy.context.scene.collection.children
+
+
+def test_surface_of(plane):
+    assert layers.surface_of(plane) is None, "no layers yet"
+    assert layers.surface_of(None) is None
+    layer, _ = node_setup.create_layer(plane, "A")
+    grass = _grass(layer)
+    assert layers.surface_of(plane) == plane
+    assert layers.surface_of(grass) == plane
+    other = bpy.data.objects.new("Other", bpy.data.meshes.new("Other"))
+    bpy.context.scene.collection.objects.link(other)
+    assert layers.surface_of(other) is None
+
+
+def test_surface_of_falls_back_to_the_surface_input(plane):
+    layer, mod = node_setup.create_layer(plane, "A")
+    grass = _grass(layer)
+    grass.parent = None
+    assert layers.surface_of(grass) == plane
+
+
+def test_get_modifier_is_none_when_the_grass_object_is_gone(plane):
+    layer, mod = node_setup.create_layer(plane, "A")
+    grass = _grass(layer)
+    grass.modifiers.remove(mod)
+    assert layers.get_modifier(plane, layer) is None
+    bpy.data.objects.remove(grass)
+    assert layer.grass_object is None
+    assert layers.get_modifier(plane, layer) is None
+    assert layers.layer_material(plane, layer) is None
 
 
 def test_effector_collection_is_shared(plane):
@@ -68,12 +155,12 @@ def test_layer_names_and_modifiers_are_unique(plane):
     assert layers.unique_layer_name(plane, "Grass") == "Grass 3"
 
 
-def test_swayfield_modifier_is_last_even_with_subdivision(plane):
+def test_surface_modifiers_are_left_alone(plane):
     sub = plane.modifiers.new("Subdivision", "SUBSURF")
     _, mod = node_setup.create_layer(plane, "Grass")
-    assert list(plane.modifiers) == [sub, mod]
     plane.modifiers.new("Displace", "DISPLACE")
-    assert list(plane.modifiers)[-1] == mod, "a later modifier must not end up below the grass"
+    assert [m.name for m in plane.modifiers] == [sub.name, "Displace"]
+    assert mod.id_data != plane
 
 
 def test_is_swayfield_modifier_ignores_other_modifiers(plane):
@@ -87,11 +174,13 @@ def test_is_swayfield_modifier_ignores_other_modifiers(plane):
 def test_remove_layer_cleans_up(plane):
     layer, mod = node_setup.create_layer(plane, "Grass")
     mat_name = layers.layer_material(plane, layer).name
+    grass_name, data_name = layer.grass_object.name, layer.grass_object.data.name
     node_setup.remove_layer(plane, layer)
-    assert not plane.modifiers
     assert not plane.swayfield.layers
+    assert grass_name not in bpy.data.objects
+    assert data_name not in bpy.data.hair_curves
     assert mat_name not in bpy.data.materials
-    assert not [f for f in (plane.animation_data.drivers if plane.animation_data else [])]
+    assert plane.name in bpy.data.objects
 
 
 def test_remove_layer_keeps_a_shared_material(plane):
@@ -125,7 +214,10 @@ def test_duplicate_layer_copies_values_and_material(plane):
     new_layer, new_mod = node_setup.duplicate_layer(plane, layer)
 
     assert new_layer.name == "Grass Copy"
-    assert new_mod.name != mod.name
+    assert new_layer.grass_object != layer.grass_object
+    assert new_layer.grass_object.name == "SF_Ground_Grass Copy"
+    assert new_layer.grass_object.parent == plane
+    assert compat.get_input(new_mod, "surface") == plane
     assert compat.get_input(new_mod, "density") == pytest.approx(1234.0)
     assert compat.get_input(new_mod, "length_max") == pytest.approx(0.77)
     assert compat.get_input(new_mod, "blade_source") == 1
@@ -143,7 +235,7 @@ def test_duplicate_gets_its_own_camera_drivers(plane, camera):
     layer, _ = node_setup.create_layer(plane, "Grass")
     _, new_mod = node_setup.duplicate_layer(plane, layer)
     from swayfield.core import drivers
-    assert drivers.has_camera_drivers(plane, new_mod)
+    assert drivers.has_camera_drivers(new_mod.id_data, new_mod)
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +267,7 @@ def test_enum_proxy_reads_and_writes_the_modifier(plane, key):
 
 def test_enum_proxy_without_modifier_is_safe(plane):
     layer, mod = node_setup.create_layer(plane, "Grass")
-    plane.modifiers.remove(mod)
+    mod.id_data.modifiers.remove(mod)
     assert layer.blade_source == "STRANDS"
     layer.blade_source = "RIBBONS"  # nothing to write to, must not raise
 
@@ -283,10 +375,10 @@ def test_upgrade_from_a_fake_older_version(plane, camera):
     layer, mod = node_setup.create_layer(plane, "Grass")
     old = _make_v0_group()
     mod.node_group = old
-    compat.set_input(mod, "Density", 321.0)
+    compat.set_input(mod, "Density", 21.0)
     compat.set_input(mod, "Intensity", 0.7)
     compat.set_input(mod, "Legacy Gain", 9.0)
-    fcurve = plane.driver_add(compat.input_data_path(mod, "Intensity"))
+    fcurve = mod.id_data.driver_add(compat.input_data_path(mod, "Intensity"))
     fcurve.driver.type = "SCRIPTED"
     fcurve.driver.expression = "frame / 100"
 
@@ -296,7 +388,7 @@ def test_upgrade_from_a_fake_older_version(plane, camera):
 
     assert mod.node_group.name == versioning.CURRENT_MAIN
     assert not versioning.needs_upgrade(mod)
-    assert compat.get_input(mod, "density") == pytest.approx(321.0)
+    assert compat.get_input(mod, "density") == pytest.approx(21.0)
     assert not compat.has_input(mod, "Legacy Gain")
     # The user's own driver survives, with the new socket identifier.
     bpy.context.scene.frame_set(50)
@@ -304,9 +396,10 @@ def test_upgrade_from_a_fake_older_version(plane, camera):
     assert compat.get_input(mod, "intensity") == pytest.approx(0.5)
     # The camera drivers are back too.
     from swayfield.core import drivers
-    assert drivers.has_camera_drivers(plane, mod)
+    assert drivers.has_camera_drivers(mod.id_data, mod)
+    assert compat.get_input(mod, "surface") == plane, "the surface input is set even if the old group lacked it"
     # Nothing left over from the old identifiers.
-    paths = [f.data_path for f in plane.animation_data.drivers]
+    paths = [f.data_path for f in mod.id_data.animation_data.drivers]
     assert len(paths) == len(set(paths))
     assert versioning.upgrade_layer(plane, layer) is False
 
@@ -339,12 +432,6 @@ def test_estimate_from_area_handles_empty_meshes(scene):
     assert budget.estimate_from_area(ob, 800.0) == 0
 
 
-def test_count_is_zero_for_a_passthrough_stub(plane):
-    layer, mod = node_setup.create_layer(plane, "Grass")
-    budget.invalidate()
-    assert budget.count_blades(plane, mod) in range(0, 1_000_000)
-
-
 def _curves_group():
     tree = bpy.data.node_groups.new("TestCurves", "GeometryNodeTree")
     tree.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
@@ -368,25 +455,33 @@ def test_count_reads_curves_from_the_evaluated_geometry(scene):
     geometry = ob.evaluated_get(depsgraph).evaluated_geometry()
     expected = len(geometry.curves.curves)
     assert expected > 0
-    assert budget._object_total(ob, depsgraph) == expected
+    assert budget._grass_total(ob, depsgraph) == expected
 
 
-def test_layers_split_the_object_total(plane, monkeypatch):
+def test_count_blades_of_a_real_layer(plane, camera):
+    layer, mod = node_setup.create_layer(plane, "Grass")
+    compat.set_input(mod, "density", 20.0)
+    budget.invalidate()
+    count = budget.count_blades(plane, mod)
+    assert 500 < count < 4000, count
+    mod.show_viewport = False
+    assert budget.count_blades(plane, mod) == 0
+
+
+def test_layers_are_counted_separately(plane, camera):
     a, mod_a = node_setup.create_layer(plane, "A")
     b, mod_b = node_setup.create_layer(plane, "B")
-    compat.set_input(mod_a, "density", 100.0)
-    compat.set_input(mod_b, "density", 300.0)
-    monkeypatch.setattr(budget, "_object_total", lambda ob, depsgraph=None: 4000)
-    assert budget.count_blades(plane, mod_a) == 1000
-    assert budget.count_blades(plane, mod_b) == 3000
-    mod_a.show_viewport = False
-    assert budget.count_blades(plane, mod_a) == 0
-    assert budget.count_blades(plane, mod_b) == 4000
+    compat.set_input(mod_a, "density", 10.0)
+    compat.set_input(mod_b, "density", 40.0)
+    budget.invalidate()
+    count_a, count_b = budget.count_blades(plane, mod_a), budget.count_blades(plane, mod_b)
+    assert count_a > 100 and count_b > 2.5 * count_a
+    assert budget.scene_totals(bpy.context).viewport == count_a + count_b
 
 
 def test_render_estimate_divides_by_the_viewport_fraction(plane, monkeypatch):
     _, mod = node_setup.create_layer(plane, "A")
-    monkeypatch.setattr(budget, "_object_total", lambda ob, depsgraph=None: 20_000)
+    monkeypatch.setattr(budget, "_grass_total", lambda grass, depsgraph=None: 20_000)
     compat.set_input(mod, "optimised", True)
     compat.set_input(mod, "viewport_density", 20.0)
     compat.set_input(mod, "simplify", 1.0)
@@ -398,9 +493,16 @@ def test_render_estimate_divides_by_the_viewport_fraction(plane, monkeypatch):
     assert budget.estimate_render_count(plane, mod) == 0
 
 
-def test_scene_totals_and_budget_guard(plane, monkeypatch):
+def test_render_estimate_falls_back_to_the_area(plane, monkeypatch):
     _, mod = node_setup.create_layer(plane, "A")
-    monkeypatch.setattr(budget, "_object_total", lambda ob, depsgraph=None: 3000)
+    monkeypatch.setattr(budget, "_grass_total", lambda grass, depsgraph=None: 0)
+    compat.set_input(mod, "density", 50.0)
+    assert budget.estimate_render_count(plane, mod) == pytest.approx(5000, rel=0.01)
+
+
+def test_scene_totals_and_budget_guard(plane, monkeypatch):
+    node_setup.create_layer(plane, "A")
+    monkeypatch.setattr(budget, "_grass_total", lambda grass, depsgraph=None: 3000)
     context = bpy.context
     totals = budget.scene_totals(context)
     assert totals.viewport == 3000 and totals[0] == 3000

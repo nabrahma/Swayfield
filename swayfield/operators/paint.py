@@ -121,14 +121,13 @@ class SWAYFIELD_OT_paint_done(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        ob = context.active_object
-        if ob is None or ob.type != "MESH":
+        if layers.target_mesh(context) is None:
             cls.poll_message_set("Select a mesh object first")
             return False
         return True
 
     def execute(self, context):
-        ob = context.active_object
+        ob = layers.target_mesh(context)
         _go_object_mode(context)
         for layer in layers.iter_layers(ob):
             if layer.paint_restore_display < 0:
@@ -162,8 +161,7 @@ class SWAYFIELD_OT_subdivide_surface(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        ob = context.active_object
-        if ob is None or ob.type != "MESH":
+        if layers.target_mesh(context) is None:
             cls.poll_message_set("Select a mesh object first")
             return False
         if context.mode != "OBJECT":
@@ -180,7 +178,7 @@ class SWAYFIELD_OT_subdivide_surface(bpy.types.Operator):
     def execute(self, context):
         import bmesh
 
-        ob = context.active_object
+        ob = layers.target_mesh(context)
         cuts = cuts_for(ob)
         if cuts < 1:
             if layers.mean_edge_length(ob) <= TARGET_EDGE:

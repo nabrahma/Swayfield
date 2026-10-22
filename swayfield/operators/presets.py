@@ -41,8 +41,8 @@ def _target(operator, context):
     """Return (object, layer, modifier, material) for the active layer, or report why not."""
     from ..core import layers
 
-    ob = context.active_object
-    if ob is None or ob.type != "MESH":
+    ob = layers.surface_of(context.active_object)
+    if ob is None:
         operator.report({"ERROR"}, "Select a mesh object with Swayfield grass first")
         return None
     layer = layers.active_layer(ob)

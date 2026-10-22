@@ -104,7 +104,7 @@ class SWAYFIELD_OT_add_exclusion(bpy.types.Operator):
 
         ob, layer, mod = layers.active_target(context)
         chosen = [o for o in context.selected_objects if o != ob and not is_effector(o)
-                  and "sf_effector_type" not in o]
+                  and "sf_effector_type" not in o and not layers.is_grass_object(o)]
         if not chosen:
             self.report({"ERROR"}, "Select the objects that should clear grass, then select the grass surface "
                                    "last so it is active")

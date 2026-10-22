@@ -80,7 +80,7 @@ def _remove_driver(ob: bpy.types.Object, mod: bpy.types.Modifier, key: str) -> N
 
 
 def add_camera_drivers(ob: bpy.types.Object, mod: bpy.types.Modifier) -> None:
-    """Add (or re-add) the camera, resolution and Simplify drivers on ``mod``.
+    """Add (or re-add) the camera, resolution and Simplify drivers on ``mod``, which lives on grass object ``ob``.
 
     The camera drivers need a scene camera: a driver whose path cannot be
     resolved is flagged invalid and then writes 0, and Blender only clears
@@ -100,7 +100,7 @@ def add_camera_drivers(ob: bpy.types.Object, mod: bpy.types.Modifier) -> None:
 
 
 def sync_camera_drivers(ob: bpy.types.Object) -> None:
-    """Make the camera drivers of every Swayfield layer on ``ob`` match the scene camera.
+    """Make the camera drivers of the Swayfield modifiers on the grass object ``ob`` match the scene camera.
 
     Adds them when a camera appeared, and removes them (restoring the default
     values) when the camera is gone.
@@ -143,7 +143,7 @@ def check_cameras(force: bool = False) -> bool:
         _seen_cameras[scene.name] = stamp
         changed = True
         for ob in scene.objects:
-            if ob.type == "MESH" and any(layers.iter_layers(ob)):
+            if layers.is_grass_object(ob):
                 sync_camera_drivers(ob)
     return changed
 

@@ -44,16 +44,60 @@ def active_layer(ob: bpy.types.Object):
     return settings.layers[index]
 
 
-def active_target(context: bpy.types.Context):
-    """``(object, layer, modifier)`` for the active object's active layer, or None."""
-    ob = context.active_object
-    if ob is None or ob.type != "MESH":
+def is_grass_object(ob: bpy.types.Object | None) -> bool:
+    """True for a Swayfield layer object (a hair Curves object carrying the modifier)."""
+    return ob is not None and (bool(ob.get("sf_grass")) or any(is_swayfield_modifier(m) for m in ob.modifiers))
+
+
+def surface_of(ob: bpy.types.Object | None) -> bpy.types.Object | None:
+    """The surface whose layer list applies to ``ob``.
+
+    ``ob`` itself when it has layers, its surface when ``ob`` is a Swayfield grass
+    object, otherwise None. Use it wherever the active object is read, so the
+    panel and operators work with either object active.
+    """
+    if ob is None:
         return None
-    layer = active_layer(ob)
-    mod = get_modifier(ob, layer)
+    if ob.type == "MESH" and len(ob.swayfield.layers):
+        return ob
+    if is_grass_object(ob):
+        parent = ob.parent
+        if parent is not None and parent.type == "MESH":
+            return parent
+        for mod in swayfield_modifiers(ob):
+            try:
+                surface = compat.get_input(mod, "surface")
+            except KeyError:
+                continue
+            if surface is not None:
+                return surface
+    return None
+
+
+def target_mesh(context: bpy.types.Context) -> bpy.types.Object | None:
+    """The mesh an operator should work on: the active surface, or a plain active mesh."""
+    ob = context.active_object
+    surface = surface_of(ob)
+    if surface is not None:
+        return surface
+    if ob is not None and ob.type == "MESH" and not is_grass_object(ob):
+        return ob
+    return None
+
+
+def active_target(context: bpy.types.Context):
+    """``(surface, layer, modifier)`` for the active layer of the active object's surface, or None.
+
+    The modifier lives on the layer's grass object.
+    """
+    surface = surface_of(context.active_object)
+    if surface is None:
+        return None
+    layer = active_layer(surface)
+    mod = get_modifier(surface, layer)
     if mod is None:
         return None
-    return ob, layer, mod
+    return surface, layer, mod
 
 
 def layer_index(ob: bpy.types.Object, layer) -> int:
@@ -64,10 +108,16 @@ def layer_index(ob: bpy.types.Object, layer) -> int:
 
 
 def get_modifier(ob: bpy.types.Object, layer) -> bpy.types.Modifier | None:
-    """The modifier of ``layer``, or None when the user deleted it by hand."""
+    """The modifier on the layer's grass object, or None when the object or modifier is gone.
+
+    ``ob`` is the surface; it is kept so call sites read the same as before.
+    """
     if layer is None:
         return None
-    mod = ob.modifiers.get(layer.modifier_name)
+    grass = layer.grass_object
+    if grass is None:
+        return None
+    mod = grass.modifiers.get(layer.modifier_name)
     if mod is not None and is_swayfield_modifier(mod):
         return mod
     return None
@@ -75,7 +125,7 @@ def get_modifier(ob: bpy.types.Object, layer) -> bpy.types.Modifier | None:
 
 def layer_for_modifier(ob: bpy.types.Object, mod: bpy.types.Modifier):
     for layer in iter_layers(ob):
-        if layer.modifier_name == mod.name:
+        if layer.grass_object == mod.id_data and layer.modifier_name == mod.name:
             return layer
     return None
 

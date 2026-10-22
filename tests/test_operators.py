@@ -7,13 +7,64 @@ import bpy
 import pytest
 from mathutils import Vector
 
-from swayfield.core import compat, drivers, layers, nodes, spec, versioning
+from swayfield.core import compat, drivers, layers, node_setup, nodes, spec, versioning
 from swayfield.operators import add_grass
+
+
+def _clear_data_keep_nodes() -> None:
+    """Like conftest's cleanup, but keeps the built Swayfield node groups: building them takes seconds."""
+    from swayfield.core import nodes
+
+    keep = {nodes.group_name(stage) for stage in nodes.STAGES}
+    for collection in (bpy.data.objects, bpy.data.meshes, bpy.data.curves, bpy.data.hair_curves,
+                       bpy.data.materials, bpy.data.cameras, bpy.data.lights, bpy.data.images,
+                       bpy.data.worlds):
+        for block in list(collection):
+            collection.remove(block)
+    for group in list(bpy.data.node_groups):
+        if group.name not in keep:
+            bpy.data.node_groups.remove(group)
+    for coll in list(bpy.data.collections):
+        bpy.data.collections.remove(coll)
+
+
+@pytest.fixture
+def scene():
+    """An empty scene at frame 1 (replaces the conftest fixture to keep the node groups between tests)."""
+    _clear_data_keep_nodes()
+    sc = bpy.context.scene
+    sc.camera = None
+    sc.render.use_simplify = False
+    sc.frame_set(1)
+    yield sc
+    _clear_data_keep_nodes()
+
 
 
 @pytest.fixture(autouse=True)
 def _cursor_at_origin():
     bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
+
+
+@pytest.fixture(autouse=True)
+def _light_layers(monkeypatch):
+    """New layers start with a tiny density, so tests that evaluate the pipeline stay fast.
+
+    Presets applied afterwards (Add Grass) still set their own values, and those tests do not evaluate.
+    """
+    create = node_setup.create_layer
+
+    def light(*args, **kwargs):
+        layer, mod = create(*args, **kwargs)
+        compat.set_input(mod, "density", 5.0)
+        compat.set_input(mod, "density_ceiling", 10.0)
+        return layer, mod
+
+    monkeypatch.setattr(node_setup, "create_layer", light)
+
+
+def _grass_objects():
+    return [o for o in bpy.data.objects if o.get("sf_grass")]
 
 
 def _grid(name, size=10.0, cuts=40, location=(0.0, 0.0, 0.0)):
@@ -120,6 +171,7 @@ def test_add_grass_creates_a_layer_with_a_preset(plane):
     mod = layers.get_modifier(plane, layer)
     assert layer.name == "Base Grass" and layer.preset == "LAWN"
     assert layers.is_swayfield_modifier(mod)
+    add_grass.flush_density_preview()
     assert layers.preset_label(plane, layer) != "Custom"
     inputs = _preset("LAWN")["inputs"]
     assert compat.get_input(mod, "length_max") == pytest.approx(inputs["length_max"])
@@ -130,10 +182,23 @@ def test_add_grass_default_preset_is_rolling_meadow(plane):
     assert plane.swayfield.layers[0].preset == "ROLLING_MEADOW"
 
 
-def test_add_grass_keeps_modifier_last(plane):
+def test_add_grass_makes_a_hair_object_and_leaves_the_surface_modifiers(plane):
     plane.modifiers.new("Subdivision", "SUBSURF")
     bpy.ops.swayfield.add_grass()
-    assert layers.is_swayfield_modifier(plane.modifiers[-1])
+    grass = plane.swayfield.layers[0].grass_object
+    assert grass.type == "CURVES" and grass.parent == plane
+    assert [m.type for m in plane.modifiers] == ["SUBSURF"]
+    assert layers.is_swayfield_modifier(grass.modifiers[0])
+    assert not grass.select_get(), "hide_select keeps the grass out of the selection"
+
+
+def test_add_grass_ignores_grass_objects(plane):
+    bpy.ops.swayfield.add_grass()
+    grass = plane.swayfield.layers[0].grass_object
+    grass.hide_select = False
+    grass.select_set(True)
+    bpy.ops.swayfield.add_grass()
+    assert len(plane.swayfield.layers) == 2 and not grass.swayfield.layers
 
 
 def test_add_grass_first_evaluation_is_light(plane):
@@ -145,6 +210,20 @@ def test_add_grass_first_evaluation_is_light(plane):
     assert add_grass._pending, "a restore is waiting for the timer"
     assert bpy.app.timers.is_registered(add_grass.flush_density_preview)
     bpy.app.timers.unregister(add_grass.flush_density_preview)
+
+
+def test_add_grass_first_evaluation_shows_points(scene, camera):
+    small = _grid("Small", size=2.0, cuts=8)
+    bpy.ops.swayfield.add_grass(preset="LAWN")
+    grass = small.swayfield.layers[0].grass_object
+    from conftest import evaluated
+    geometry = evaluated(grass).evaluated_geometry()
+    assert geometry.pointcloud is not None and len(geometry.pointcloud.points) > 0
+    assert geometry.curves is None or len(geometry.curves.curves) == 0
+    bpy.app.timers.unregister(add_grass.flush_density_preview)
+    add_grass.flush_density_preview()
+    geometry = evaluated(grass).evaluated_geometry()
+    assert geometry.curves is not None and len(geometry.curves.curves) > 0
 
 
 def test_add_grass_ramps_up_on_a_small_surface(plane):
@@ -161,10 +240,13 @@ def test_add_grass_ramps_up_on_a_small_surface(plane):
 
 
 def test_add_grass_keeps_optimised_mode_on_a_huge_surface(scene):
-    big = _grid("Big", size=1000.0, cuts=4)
+    big = _grid("Big", size=40.0, cuts=4)
     bpy.ops.swayfield.add_grass(preset="LAWN")
-    add_grass.flush_density_preview()
     mod = _mod(big)
+    density = _preset("LAWN")["inputs"]["density"]
+    assert compat.get_input(mod, "density") < density / 10, "the first pass is much lighter on a huge surface"
+    add_grass.flush_density_preview()
+    assert compat.get_input(mod, "density") == pytest.approx(density)
     assert bool(compat.get_input(mod, "optimised")) is True
     assert compat.get_input(mod, "display_mode") == 0
 
@@ -224,7 +306,7 @@ def test_layer_add_duplicate_remove(plane):
 
     bpy.ops.swayfield.layer_remove()
     assert [layer.name for layer in plane.swayfield.layers] == ["Tall Wisps", "Flowers"]
-    assert len(layers.swayfield_modifiers(plane)) == 2
+    assert len(_grass_objects()) == 2
     bpy.ops.swayfield.layer_remove(index=0)
     assert [layer.name for layer in plane.swayfield.layers] == ["Flowers"]
     assert plane.swayfield.active_layer_index == 0
@@ -234,7 +316,7 @@ def test_layer_remove_deletes_modifier_and_unused_material(plane):
     bpy.ops.swayfield.layer_add(layer_name="Only")
     name = layers.layer_material(plane, plane.swayfield.layers[0]).name
     bpy.ops.swayfield.layer_remove()
-    assert not plane.modifiers
+    assert not _grass_objects() and not bpy.data.hair_curves
     assert name not in bpy.data.materials
 
 
@@ -245,25 +327,39 @@ def test_layer_operators_need_a_layer(plane):
             getattr(bpy.ops.swayfield, name)()
 
 
-def test_layer_move_reorders_list_and_stack(plane):
-    plane.modifiers.new("Subdivision", "SUBSURF")
+def test_layer_move_reorders_the_list(plane):
     for name in ("A", "B", "C"):
         bpy.ops.swayfield.layer_add(layer_name=name)
 
     def order():
-        return [layer.name for layer in plane.swayfield.layers], [
-            m.name for m in plane.modifiers if layers.is_swayfield_modifier(m)]
+        return [layer.name for layer in plane.swayfield.layers]
 
-    assert order() == (["A", "B", "C"], ["Swayfield A", "Swayfield B", "Swayfield C"])
+    grass = {layer.name: layer.grass_object for layer in plane.swayfield.layers}
+    assert order() == ["A", "B", "C"]
     bpy.ops.swayfield.layer_move(direction="UP")
-    assert order() == (["A", "C", "B"], ["Swayfield A", "Swayfield C", "Swayfield B"])
+    assert order() == ["A", "C", "B"]
     assert plane.swayfield.layers[plane.swayfield.active_layer_index].name == "C"
     bpy.ops.swayfield.layer_move(direction="UP")
-    assert order()[0] == ["C", "A", "B"]
+    assert order() == ["C", "A", "B"]
     assert bpy.ops.swayfield.layer_move(direction="UP") == {"CANCELLED"}
     bpy.ops.swayfield.layer_move(direction="DOWN")
-    assert order() == (["A", "C", "B"], ["Swayfield A", "Swayfield C", "Swayfield B"])
-    assert plane.modifiers[0].type == "SUBSURF", "the Subdivision modifier stays below the grass"
+    assert order() == ["A", "C", "B"]
+    assert {layer.name: layer.grass_object for layer in plane.swayfield.layers} == grass
+    assert all(layers.get_modifier(plane, layer) is not None for layer in plane.swayfield.layers)
+
+
+def test_operators_work_with_the_grass_object_active(plane):
+    bpy.ops.swayfield.layer_add(layer_name="A")
+    grass = plane.swayfield.layers[0].grass_object
+    _select(plane)
+    grass.hide_select = False
+    _select(grass)
+    assert bpy.context.active_object == grass
+    bpy.ops.swayfield.layer_duplicate()
+    assert [layer.name for layer in plane.swayfield.layers] == ["A", "A Copy"]
+    assert len(_grass_objects()) == 2
+    bpy.ops.swayfield.layer_remove()
+    assert len(_grass_objects()) == 1
 
 
 def test_layer_solo_toggles(plane):
@@ -292,11 +388,12 @@ def test_upgrade_layer_operator(plane, camera):
     with pytest.raises(RuntimeError):
         bpy.ops.swayfield.upgrade_layer()  # already current: poll fails
     mod.node_group = _make_v0_group()
-    compat.set_input(mod, "Density", 555.0)
+    compat.set_input(mod, "Density", 55.0)
     assert versioning.needs_upgrade(mod)
     assert bpy.ops.swayfield.upgrade_layer() == {"FINISHED"}
     assert mod.node_group.name == versioning.CURRENT_MAIN
-    assert compat.get_input(mod, "density") == pytest.approx(555.0)
+    assert compat.get_input(mod, "density") == pytest.approx(55.0)
+    assert compat.get_input(mod, "surface") == plane
 
 
 def test_sync_linked(scene):
@@ -339,6 +436,18 @@ def test_paint_density_creates_group_and_enters_weight_paint(plane):
     weights = _weights(plane, group)
     assert len(weights) == len(plane.data.vertices) and set(weights) == {1.0}
     assert plane.mode == "WEIGHT_PAINT"
+    assert bpy.ops.swayfield.paint_done() == {"FINISHED"}
+    assert plane.mode == "OBJECT"
+
+
+def test_paint_with_the_grass_object_active_makes_the_surface_active(plane):
+    bpy.ops.swayfield.layer_add(layer_name="Base Grass")
+    grass = plane.swayfield.layers[0].grass_object
+    grass.hide_select = False
+    _select(grass)
+    assert bpy.ops.swayfield.paint(map="DENSITY") == {"FINISHED"}
+    assert bpy.context.active_object == plane and plane.mode == "WEIGHT_PAINT"
+    assert "SF_Base_Grass_density" in plane.vertex_groups
     assert bpy.ops.swayfield.paint_done() == {"FINISHED"}
     assert plane.mode == "OBJECT"
 
@@ -437,41 +546,107 @@ def test_subdivide_surface_leaves_fine_meshes_alone(scene):
 def test_bake_reports_a_missing_bake_node(plane):
     bpy.ops.swayfield.layer_add()
     mod = _mod(plane)
-    if "SF_Bake" in mod.node_group.nodes:
-        pytest.skip("the main group has a bake node, covered by test_bake_and_free")
-    for name in ("bake_scatter", "free_bake"):
-        with pytest.raises(RuntimeError, match="no scatter bake node"):
-            getattr(bpy.ops.swayfield, name)()
+    node = mod.node_group.nodes.get("SF_Bake")
+    old_name = node.name
+    node.name = "Renamed"
+    try:
+        for name in ("bake_scatter", "free_bake"):
+            with pytest.raises(RuntimeError, match="no scatter bake node"):
+                getattr(bpy.ops.swayfield, name)()
+    finally:
+        node.name = old_name
 
 
-def test_bake_and_free(plane):
+def test_bake_and_free(plane, camera):
+    from swayfield.operators import bake
+    _select(plane)
     bpy.ops.swayfield.layer_add()
     mod = _mod(plane)
-    if "SF_Bake" not in mod.node_group.nodes:
-        pytest.skip("SF_Main_v1 has no SF_Bake node yet")
-    from swayfield.operators import bake
-    assert bake.find_bake_id(mod) is not None
+    assert bake.find_bake_id(mod) == mod.bakes[0].bake_id
+    assert mod.id_data.session_uid != plane.session_uid
     assert bpy.ops.swayfield.bake_scatter() == {"FINISHED"}
     assert bpy.ops.swayfield.free_bake() == {"FINISHED"}
 
 
-def test_find_bake_id_with_a_bake_node(plane):
-    """The lookup works for any group with a Bake node named SF_Bake, whatever Main contains."""
-    from swayfield.operators import bake
-    tree = bpy.data.node_groups.new("SF_Main_vBake", "GeometryNodeTree")
-    tree.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-    tree.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-    gin, gout = tree.nodes.new("NodeGroupInput"), tree.nodes.new("NodeGroupOutput")
-    node = tree.nodes.new("GeometryNodeBake")
-    node.name = "SF_Bake"
-    tree.links.new(gin.outputs[0], node.inputs[0])
-    tree.links.new(node.outputs[0], gout.inputs[0])
-    mod = plane.modifiers.new("Swayfield Test", "NODES")
-    mod.node_group = tree
-    assert bake.find_bake_id(mod) == mod.bakes[0].bake_id
+def _optimised_layer(plane):
     _select(plane)
-    layer = plane.swayfield.layers.add()
-    layer.name, layer.modifier_name = "Test", mod.name
+    bpy.ops.swayfield.layer_add()
+    mod = _mod(plane)
+    compat.set_input(mod, "optimised", True)
+    compat.set_input(mod, "viewport_density", 20.0)
+    return mod
+
+
+def test_bake_holds_optimised_and_simplify_off_then_restores(plane, camera, monkeypatch):
+    from swayfield.operators import bake
+    mod = _optimised_layer(plane)
+    bpy.context.scene.render.use_simplify = True
+    bpy.context.scene.render.simplify_child_particles = 0.3
+    bpy.context.view_layer.update()
+    assert compat.get_input(mod, "simplify") == pytest.approx(0.3)
+    seen = {}
+
+    def fake(context, grass, modifier, bake_id):
+        seen["optimised"] = bool(compat.get_input(modifier, "optimised"))
+        seen["simplify"] = compat.get_input(modifier, "simplify")
+        bpy.context.view_layer.update()  # the driver must not pull the value back
+        seen["simplify_after_update"] = compat.get_input(modifier, "simplify")
+        return {"FINISHED"}
+
+    monkeypatch.setattr(bake, "run_bake", fake)
+    assert bpy.ops.swayfield.bake_scatter() == {"FINISHED"}
+    assert seen == {"optimised": False, "simplify": 1.0, "simplify_after_update": 1.0}
+    assert bool(compat.get_input(mod, "optimised")) is True
+    assert compat.get_input(mod, "simplify") == pytest.approx(0.3)
+    driver = [f for f in mod.id_data.animation_data.drivers
+              if f.data_path == compat.input_data_path(mod, "simplify")][0]
+    assert not driver.mute
+    bpy.context.view_layer.update()
+    assert compat.get_input(mod, "simplify") == pytest.approx(0.3), "the driver works again"
+
+
+@pytest.mark.parametrize("failure", ["error", "cancelled"])
+def test_bake_restores_inputs_when_the_bake_fails(plane, camera, monkeypatch, failure):
+    from swayfield.operators import bake
+    mod = _optimised_layer(plane)
+    bpy.context.scene.render.use_simplify = True
+    bpy.context.scene.render.simplify_child_particles = 0.5
+    bpy.context.view_layer.update()
+    assert compat.get_input(mod, "simplify") == pytest.approx(0.5)
+
+    def fake(context, grass, modifier, bake_id):
+        if failure == "error":
+            raise RuntimeError("bake failed")
+        return {"CANCELLED"}
+
+    monkeypatch.setattr(bake, "run_bake", fake)
+    with pytest.raises(RuntimeError, match="did not run"):
+        bpy.ops.swayfield.bake_scatter()
+    assert bool(compat.get_input(mod, "optimised")) is True
+    assert compat.get_input(mod, "simplify") == pytest.approx(0.5)
+    bpy.context.view_layer.update()
+    assert compat.get_input(mod, "simplify") == pytest.approx(0.5)
+    assert not [f for f in mod.id_data.animation_data.drivers if f.mute]
+
+
+def test_real_bake_restores_inputs(plane, camera):
+    mod = _optimised_layer(plane)
+    try:
+        result = bpy.ops.swayfield.bake_scatter()
+    except RuntimeError as err:
+        pytest.skip(f"the bake cannot run headless here: {err}")
+    assert result == {"FINISHED"}
+    assert bool(compat.get_input(mod, "optimised")) is True
+    assert compat.get_input(mod, "viewport_density") == pytest.approx(20.0)
+    bpy.ops.swayfield.free_bake()
+
+
+def test_bake_works_with_the_grass_object_active(plane, camera):
+    _select(plane)
+    bpy.ops.swayfield.layer_add()
+    grass = plane.swayfield.layers[0].grass_object
+    grass.hide_select = False
+    _select(grass)
     assert bpy.ops.swayfield.bake_scatter() == {"FINISHED"}
     assert bpy.ops.swayfield.free_bake() == {"FINISHED"}
 

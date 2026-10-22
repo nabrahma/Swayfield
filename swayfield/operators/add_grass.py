@@ -15,6 +15,9 @@ SEED_STEP = 9973
 #: Seconds the first evaluation stays light before the preset's values are restored.
 PREVIEW_SECONDS = 0.5
 PREVIEW_DENSITY = 10.0
+#: Most points the first evaluation may generate. Distribution runs before viewport thinning,
+#: so on a huge surface the density itself is lowered for the first pass.
+PREVIEW_POINTS = 150_000
 DISPLAY_FULL = 0
 DISPLAY_POINTS = 2
 
@@ -79,6 +82,14 @@ def flush_density_preview() -> None:
         compat.set_input(mod, "display_mode", plan["display_mode"])
         compat.set_input(mod, "viewport_density", plan["viewport_density"])
         compat.set_input(mod, "optimised", plan["optimised"])
+        if plan["density"] is not None:
+            compat.set_input(mod, "density", plan["density"])
+            compat.set_input(mod, "density_ceiling", plan["density_ceiling"])
+        # The preview changed look inputs, so the preset fingerprint must be taken again.
+        surface = bpy.data.objects.get(plan["surface"])
+        layer = next((x for x in layers.iter_layers(surface) if x.name == plan["layer"]), None) if surface else None
+        if layer is not None and plan["preset"] and layer.preset == plan["preset"]:
+            layers.mark_preset(surface, layer, plan["preset"])
     budget.invalidate()
 
 
@@ -99,13 +110,16 @@ class SWAYFIELD_OT_add_grass(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        surfaces = [ob for ob in context.selected_objects if ob.type == "MESH" and not is_effector(ob)]
+        surfaces = [ob for ob in context.selected_objects
+                    if ob.type == "MESH" and not is_effector(ob) and not layers.is_grass_object(ob)]
         if not surfaces:
             self.report({"ERROR"}, "Select a mesh object first")
             return {"CANCELLED"}
 
         settings = context.scene.swayfield
         link_id = uuid.uuid4().hex[:8]
+        # Counted before the new layers exist, so the guard never evaluates grass that is about to appear.
+        existing = budget.scene_totals(context).viewport
         plans: list[dict] = []
         total_estimate = 0
         used_preset = True
@@ -118,18 +132,33 @@ class SWAYFIELD_OT_add_grass(bpy.types.Operator):
             total_estimate += full
             viewport_density = float(compat.get_input(mod, "viewport_density"))
             plans.append({
-                "object": ob.name,
+                "surface": ob.name,
+                "layer": layer.name,
+                "preset": layer.preset if layer.preset != "CUSTOM" else "",
+                "object": layer.grass_object.name,
                 "modifier": mod.name,
                 "display_mode": int(compat.get_input(mod, "display_mode")),
                 "viewport_density": viewport_density,
                 "optimised": full > settings.auto_optimise_threshold,
+                "density": None,
+                "density_ceiling": None,
             })
+            # A huge surface would still generate millions of points before thinning: lower the density
+            # for the first pass only.
+            ceiling = float(compat.get_input(mod, "density_ceiling"))
+            generated = budget.estimate_from_area(ob, ceiling)
+            if generated > PREVIEW_POINTS:
+                factor = PREVIEW_POINTS / generated
+                plans[-1]["density"] = float(compat.get_input(mod, "density"))
+                plans[-1]["density_ceiling"] = ceiling
+                compat.set_input(mod, "density", max(plans[-1]["density"] * factor, 1.0))
+                compat.set_input(mod, "density_ceiling", max(ceiling * factor, 1.0))
             # Density preview: the first evaluation is light, so a huge mesh cannot lock the UI.
             compat.set_input(mod, "optimised", True)
             compat.set_input(mod, "viewport_density", PREVIEW_DENSITY)
             compat.set_input(mod, "display_mode", DISPLAY_POINTS)
 
-        if budget.would_exceed_budget(context, total_estimate):
+        if existing + total_estimate > settings.budget:
             for plan in plans:
                 plan["optimised"] = True
             self.report({"WARNING"}, f"About {total_estimate:,} blades is over your budget of "

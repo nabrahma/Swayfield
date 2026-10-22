@@ -100,7 +100,7 @@ def _restore_drivers(ob: bpy.types.Object, mod: bpy.types.Modifier, old_ids: dic
 
 
 def upgrade_layer(ob: bpy.types.Object, layer) -> bool:
-    """Move ``layer`` to the newest main group. Returns False when it is already current."""
+    """Move ``layer`` of surface ``ob`` to the newest main group. Returns False when it is already current."""
     from . import nodes
 
     mod = layers.get_modifier(ob, layer)
@@ -109,12 +109,13 @@ def upgrade_layer(ob: bpy.types.Object, layer) -> bool:
     if not needs_upgrade(mod):
         return False
 
+    grass = mod.id_data  # drivers live on the layer's grass object
     old_group = mod.node_group
     old_ids = _input_sockets(old_group)
     values = {name: compat.get_input(mod, name) for name in old_ids}
-    saved = _copy_drivers(ob, mod, old_ids)
-    for fcurve in _driver_curves(ob, mod):
-        ob.animation_data.drivers.remove(fcurve)
+    saved = _copy_drivers(grass, mod, old_ids)
+    for fcurve in _driver_curves(grass, mod):
+        grass.animation_data.drivers.remove(fcurve)
 
     new_group = nodes.ensure("main")
     mod.node_group = new_group
@@ -125,7 +126,9 @@ def upgrade_layer(ob: bpy.types.Object, layer) -> bool:
                 compat.set_input(mod, name, value)
             except (TypeError, ValueError, AttributeError):
                 pass  # the socket type changed between versions, keep the new default
-    drivers.add_camera_drivers(ob, mod)
-    _restore_drivers(ob, mod, old_ids, new_ids, saved)
-    ob.update_tag()
+    if compat.has_input(mod, spec.BY_KEY["surface"].name):
+        compat.set_input(mod, "surface", ob)  # older groups may not have had the input
+    drivers.add_camera_drivers(grass, mod)
+    _restore_drivers(grass, mod, old_ids, new_ids, saved)
+    grass.update_tag()
     return True

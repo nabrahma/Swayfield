@@ -1,16 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Create, remove and duplicate grass layers: modifier, material, drivers and list entry."""
+"""Create, remove and duplicate grass layers.
+
+Each layer is a hair Curves object parented to the surface, because Cycles and EEVEE
+only render curves as hair on Curves objects. It carries the modifier, the material
+slot and the drivers. The layer list stays on the surface.
+"""
 
 from __future__ import annotations
 
 import bpy
+from mathutils import Matrix
 
 from . import compat, drivers, layers, nodes, spec
 
 EFFECTORS_COLLECTION = "SF_Effectors"
 
 #: Inputs that belong to one layer or are driven, so duplicating a layer does not copy them.
-_NOT_COPIED = frozenset({"material", "preview_material", *drivers.DRIVEN_KEYS})
+_NOT_COPIED = frozenset({"surface", "material", "preview_material", *drivers.DRIVEN_KEYS})
 
 
 def ensure_effector_collection(scene: bpy.types.Scene | None = None) -> bpy.types.Collection:
@@ -60,47 +66,53 @@ def material_name(ob: bpy.types.Object, layer_name: str) -> str:
     return f"SF_{ob.name}_{layer_name}"
 
 
-def move_modifier(ob: bpy.types.Object, mod: bpy.types.Modifier, target_index: int) -> None:
-    """Move ``mod`` to ``target_index`` in the stack, on Blender 4.2 and newer."""
-    current = list(ob.modifiers).index(mod)
-    if current == target_index:
-        return
-    if hasattr(ob.modifiers, "move"):
-        ob.modifiers.move(current, target_index)
-        return
-    with bpy.context.temp_override(object=ob, active_object=ob):
-        bpy.ops.object.modifier_move_to_index(modifier=mod.name, index=target_index)
+def grass_object_name(surface: bpy.types.Object, layer_name: str) -> str:
+    return f"SF_{surface.name}_{layer_name}"
 
 
-def create_layer(ob: bpy.types.Object, name: str, *, seed_offset: int = 0, link_id: str = "",
+def _make_grass_object(surface: bpy.types.Object, name: str) -> bpy.types.Object:
+    """A hair Curves object that follows ``surface``, in the surface's collection."""
+    ob = bpy.data.objects.new(name, bpy.data.hair_curves.new(name))
+    collection = surface.users_collection[0] if surface.users_collection else bpy.context.scene.collection
+    collection.objects.link(ob)
+    ob.parent = surface
+    ob.matrix_parent_inverse = Matrix.Identity(4)
+    ob["sf_grass"] = True
+    ob.hide_select = True  # clicking the terrain must not pick the grass
+    return ob
+
+
+def create_layer(surface: bpy.types.Object, name: str, *, seed_offset: int = 0, link_id: str = "",
                  material: bpy.types.Material | None = None):
-    """Add a grass layer to ``ob`` and return ``(layer, modifier)``.
+    """Add a grass layer to ``surface`` and return ``(layer, modifier)``.
 
-    The modifier goes last in the stack, so it sees Subdivision, Displace and
-    similar modifiers below it (SC-16). ``material`` reuses an existing
-    material instead of creating a new one (used by duplicate).
+    The modifier sits on a new hair Curves object ``SF_<surface>_<layer>`` that is
+    parented to the surface. The modifier reads the surface through its
+    ``surface`` input, so the surface's own modifiers (Subdivision, Displace)
+    count (SC-16). ``material`` reuses an existing material instead of creating
+    a new one (used by duplicate).
     """
-    name = layers.unique_layer_name(ob, name)
-    mod = ob.modifiers.new(f"Swayfield {name}", "NODES")
+    name = layers.unique_layer_name(surface, name)
+    grass = _make_grass_object(surface, grass_object_name(surface, name))
+    mod = grass.modifiers.new(f"Swayfield {name}", "NODES")
     mod.node_group = nodes.ensure("main")
-    if hasattr(mod, "use_pin_to_last"):
-        mod.use_pin_to_last = True  # keeps it below later additions, Blender 4.2+
     mod.show_expanded = False  # the Swayfield panel replaces the modifier panel
-    # Pinned modifiers are inserted before older pinned ones. Keep layers in list order.
-    move_modifier(ob, mod, len(ob.modifiers) - 1)
+    compat.set_input(mod, "surface", surface)
 
-    mat = material or _create_material(material_name(ob, name))
+    mat = material or _create_material(material_name(surface, name))
     compat.set_input(mod, "material", mat)
+    grass.data.materials.append(mat)
     preview = _preview_material()
     if preview is not None:
         compat.set_input(mod, "preview_material", preview)
     compat.set_input(mod, "effector_collection", ensure_effector_collection())
     compat.set_input(mod, "seed_offset", seed_offset)
-    drivers.add_camera_drivers(ob, mod)
+    drivers.add_camera_drivers(grass, mod)
 
-    settings = ob.swayfield
+    settings = surface.swayfield
     layer = settings.layers.add()
     layer.name = name
+    layer.grass_object = grass
     layer.modifier_name = mod.name
     layer.preset = "CUSTOM"
     layer.wind_preset = "CUSTOM"
@@ -137,26 +149,31 @@ def _collection_in_use(coll: bpy.types.Collection, ignore: bpy.types.Modifier) -
 
 
 def remove_layer(ob: bpy.types.Object, layer) -> None:
-    """Delete the layer, its modifier, its drivers, and its material and exclusion collection if unused."""
+    """Delete the layer, its grass object and hair data, and its material and exclusion collection if unused."""
     settings = ob.swayfield
     index = layers.layer_index(ob, layer)
     mod = layers.get_modifier(ob, layer)
+    grass = layer.grass_object
     if mod is not None:
         mat = layers.layer_material(ob, layer)
         try:
             exclusion = compat.get_input(mod, "exclusion_collection")
         except KeyError:
             exclusion = None
-        drivers.remove_all_drivers(ob, mod)
-        if mat is not None and mat.name.startswith("SF_") and not _material_in_use(mat, mod):
-            compat.set_input(mod, "material", None)
-            bpy.data.materials.remove(mat)
-        in_use = exclusion is not None and _collection_in_use(exclusion, mod)
-        ob.modifiers.remove(mod)
-        if exclusion is not None and exclusion.name.startswith("SF_Exclude_") and not in_use:
-            bpy.data.collections.remove(exclusion)
+        exclusion_in_use = exclusion is not None and _collection_in_use(exclusion, mod)
+        material_in_use = mat is not None and _material_in_use(mat, mod)
     if index >= 0:
         settings.layers.remove(index)
+    if grass is not None:
+        data = grass.data
+        bpy.data.objects.remove(grass)
+        if data is not None and data.users == 0:
+            bpy.data.hair_curves.remove(data)
+    if mod is not None:
+        if mat is not None and mat.name.startswith("SF_") and not material_in_use:
+            bpy.data.materials.remove(mat)
+        if exclusion is not None and exclusion.name.startswith("SF_Exclude_") and not exclusion_in_use:
+            bpy.data.collections.remove(exclusion)
     settings.active_layer_index = max(0, min(settings.active_layer_index, len(settings.layers) - 1))
 
 

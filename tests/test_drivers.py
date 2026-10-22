@@ -9,18 +9,61 @@ import pytest
 from swayfield.core import compat, drivers, node_setup
 
 
+def _clear_data_keep_nodes() -> None:
+    """Like conftest's cleanup, but keeps the built Swayfield node groups: building them takes seconds."""
+    from swayfield.core import nodes
+
+    keep = {nodes.group_name(stage) for stage in nodes.STAGES}
+    for collection in (bpy.data.objects, bpy.data.meshes, bpy.data.curves, bpy.data.hair_curves,
+                       bpy.data.materials, bpy.data.cameras, bpy.data.lights, bpy.data.images,
+                       bpy.data.worlds):
+        for block in list(collection):
+            collection.remove(block)
+    for group in list(bpy.data.node_groups):
+        if group.name not in keep:
+            bpy.data.node_groups.remove(group)
+    for coll in list(bpy.data.collections):
+        bpy.data.collections.remove(coll)
+
+
+@pytest.fixture
+def scene():
+    """An empty scene at frame 1 (replaces the conftest fixture to keep the node groups between tests)."""
+    _clear_data_keep_nodes()
+    sc = bpy.context.scene
+    sc.camera = None
+    sc.frame_set(1)
+    yield sc
+    _clear_data_keep_nodes()
+
+
+
 def _update():
     bpy.context.view_layer.update()
 
 
+def _new_layer(plane, name="Grass"):
+    """A layer with a tiny density, so every depsgraph update stays fast."""
+    layer, mod = node_setup.create_layer(plane, name)
+    compat.set_input(mod, "density", 5.0)
+    return layer, mod
+
+
 @pytest.fixture
 def layer_mod(plane, camera):
-    _, mod = node_setup.create_layer(plane, "Grass")
-    return plane, mod
+    """The grass object (drivers live there) and its modifier."""
+    _, mod = _new_layer(plane)
+    return mod.id_data, mod
 
 
 def _get(mod, key):
     return compat.get_input(mod, key)
+
+
+def test_drivers_live_on_the_grass_object(plane, camera):
+    _, mod = _new_layer(plane)
+    assert mod.id_data.type == "CURVES"
+    assert plane.animation_data is None or not plane.animation_data.drivers
 
 
 def test_every_driven_input_gets_a_driver(layer_mod, camera):
@@ -120,13 +163,13 @@ def test_simplify_factor(layer_mod, scene):
 
 def test_missing_camera_does_not_raise(plane, scene):
     scene.camera = None
-    _, mod = node_setup.create_layer(plane, "Grass")
+    _, mod = _new_layer(plane)
     _update()
     # No camera drivers: an unresolvable driver would write 0, so the inputs keep their defaults.
     assert _get(mod, "cam_focal_length") == pytest.approx(50.0)
     assert _get(mod, "cam_sensor_width") == pytest.approx(36.0)
     assert bool(_get(mod, "cam_ortho")) is False
-    assert not drivers.has_camera_drivers(plane, mod)
+    assert not drivers.has_camera_drivers(mod.id_data, mod)
     # The scene drivers are still there.
     scene.render.resolution_x = 1280
     _update()
@@ -135,7 +178,7 @@ def test_missing_camera_does_not_raise(plane, scene):
 
 def test_camera_added_later_is_picked_up(plane, scene):
     scene.camera = None
-    _, mod = node_setup.create_layer(plane, "Grass")
+    _, mod = _new_layer(plane)
     drivers.check_cameras()
     cam_data = bpy.data.cameras.new("Late")
     cam_data.lens = 18.0
@@ -144,7 +187,7 @@ def test_camera_added_later_is_picked_up(plane, scene):
     scene.camera = cam
     assert drivers.check_cameras() is True
     _update()
-    assert drivers.has_camera_drivers(plane, mod)
+    assert drivers.has_camera_drivers(mod.id_data, mod)
     assert _get(mod, "cam_focal_length") == pytest.approx(18.0)
     assert drivers.check_cameras() is False, "nothing changed since the last check"
 
@@ -185,13 +228,13 @@ def test_remove_drivers(layer_mod, camera):
 
 
 def test_two_layers_have_their_own_drivers(plane, camera):
-    _, a = node_setup.create_layer(plane, "A")
-    _, b = node_setup.create_layer(plane, "B")
+    _, a = _new_layer(plane, "A")
+    _, b = _new_layer(plane, "B")
     camera.data.lens = 70.0
     _update()
     assert _get(a, "cam_focal_length") == pytest.approx(70.0)
     assert _get(b, "cam_focal_length") == pytest.approx(70.0)
-    assert len(plane.animation_data.drivers) == 2 * len(drivers.DRIVEN_KEYS)
+    assert len(a.id_data.animation_data.drivers) == len(drivers.DRIVEN_KEYS) == len(b.id_data.animation_data.drivers)
 
 
 def test_fov_math_is_consistent(layer_mod, camera):

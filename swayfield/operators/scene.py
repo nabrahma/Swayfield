@@ -8,7 +8,7 @@ import math
 import bpy
 from mathutils import Vector
 
-from ..core import drivers
+from ..core import drivers, layers
 from .effectors import world_bounds
 
 CAMERA_NAME = "SF_Quick_Look_Camera"
@@ -62,8 +62,8 @@ def _sky(scene: bpy.types.Scene) -> None:
     if scene.world is not None:
         return
     world = bpy.data.worlds.new(WORLD_NAME)
-    if hasattr(world, "use_nodes"):
-        world.use_nodes = True
+    if world.node_tree is None and hasattr(world, "use_nodes"):
+        world.use_nodes = True  # Blender 4.x; newer versions create the node tree themselves
     background = world.node_tree.nodes.get("Background") if world.node_tree is not None else None
     if background is not None:
         background.inputs["Color"].default_value = (0.45, 0.62, 0.9, 1.0)
@@ -80,14 +80,13 @@ class SWAYFIELD_OT_quick_look(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        ob = context.active_object
-        if ob is None or ob.type != "MESH":
+        if layers.target_mesh(context) is None:
             cls.poll_message_set("Select the grass surface first")
             return False
         return True
 
     def execute(self, context):
-        ob = context.active_object
+        ob = layers.target_mesh(context)
         scene = context.scene
         low, high = world_bounds(ob)
         size_y = max(high.y - low.y, 0.1)
