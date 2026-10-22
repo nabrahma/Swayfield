@@ -174,6 +174,8 @@ def _mask_inputs(prefix: str, label: str) -> list[Input]:
 
 INPUTS: tuple[Input, ...] = (
     # --- Distribution -------------------------------------------------------
+    _I("surface", "Surface", "OBJECT", None, panel="Distribution",
+       description="Mesh object the grass grows on. Its modifiers are included"),
     _I("seed", "Seed", "INT", 0, 0, 1_000_000, panel="Distribution",
        description="Random seed for blade placement"),
     _I("density", "Density", "FLOAT", 800.0, 1.0, 20_000.0, panel="Distribution",

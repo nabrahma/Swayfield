@@ -52,6 +52,17 @@ rebuilding regenerates socket identifiers and would drop modifier values.
 Changes to a released group ship as a new version (`SF_Main_v2`) plus an
 upgrade step in `core/versioning.py`.
 
+## Layer objects
+
+Cycles and EEVEE render curves as hair only on hair Curves objects, not on
+mesh objects. Each grass layer is therefore its own hair Curves object
+(`SF_<surface>_<layer>`), parented to the surface, carrying the Swayfield
+modifier. The modifier reads the surface through its `Surface` input with
+Object Info (evaluated, so the surface's own modifiers such as Subdivision
+and Displace count, and its vertex groups arrive as attributes). Layer UI
+state stays on the surface object (`Object.swayfield.layers`), and each layer
+points at its grass object.
+
 ## Pipeline
 
 ```
@@ -60,10 +71,11 @@ Surface ─► to world ─► SF_Masks ─► SF_Distribute ─► [Bake] ─�
                        attributes                                         instances    blades      ribbons
 ```
 
-* `SF_Main_v1` is the modifier group. It exposes every input in `spec.py`
-  (grouped in panels), transforms the surface to world space so every stage
-  works in world units, runs the stages, transforms the result back, and joins
-  it with the original surface.
+* `SF_Main_v1` is the modifier group on the layer's grass object. It exposes
+  every input in `spec.py` (grouped in panels), reads the `Surface` object,
+  transforms it to world space so every stage works in world units, runs the
+  stages and transforms the result back. Mask Preview adds a slightly lifted
+  copy of the surface carrying `sf_mask`.
 * The static half (Masks, Distribute) sits before a Bake node named `SF_Bake`,
   so heavy masks can be cached. Culling, blades, wind and shading are evaluated
   every frame, and culling runs before blades are built.
