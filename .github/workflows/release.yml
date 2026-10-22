@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      BLENDER_DIR: ${{ github.workspace }}/.blender/blender-5.2.3-linux-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Blender
+        id: cache-blender
+        uses: actions/cache@v4
+        with:
+          path: .blender
+          key: blender-5.2.3-linux-x64
+      - name: Install runtime libraries for headless Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxi6 libxxf86vm1 libxfixes3 libxrender1 libxkbcommon0 libsm6 libice6 \
+            libgl1 libegl1 libx11-6 libxext6 libxcb1 libdecor-0-0
+      - name: Download Blender
+        if: steps.cache-blender.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .blender
+          curl -fsSL "https://download.blender.org/release/Blender5.2/blender-5.2.3-linux-x64.tar.xz" \
+            | tar -xJ -C .blender
+      - name: Check tag matches manifest version
+        run: |
+          python3 - <<'PY'
+          import os, sys, tomllib
+          with open("swayfield/blender_manifest.toml", "rb") as f:
+              version = tomllib.load(f)["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != "v" + version:
+              sys.exit(f"Tag {tag} does not match manifest version {version}")
+          PY
+      - name: Build extension
+        run: python3 tools/build.py --blender "$BLENDER_DIR/blender"
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          python3 - <<'PY'
+          import os, re
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          lines, found = [], False
+          try:
+              text = open("CHANGELOG.md", encoding="utf-8").read().splitlines()
+          except FileNotFoundError:
+              text = []
+          for line in text:
+              if line.startswith("## "):
+                  if found:
+                      break
+                  found = re.search(r"(?<![\w.])v?" + re.escape(version) + r"(?![\w.])", line) is not None
+                  continue
+              if found:
+                  lines.append(line)
+          notes = "\n".join(lines).strip()
+          if not notes:
+              notes = f"Release {version}. See CHANGELOG.md."
+          open("release_notes.md", "w", encoding="utf-8").write(notes + "\n")
+          print(notes)
+          PY
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          files: dist/*.zip
+          fail_on_unmatched_files: true

@@ -1,0 +1,43 @@
+name: Render regression
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    env:
+      BLENDER_DIR: ${{ github.workspace }}/.blender/blender-5.2.3-linux-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Blender
+        id: cache-blender
+        uses: actions/cache@v4
+        with:
+          path: .blender
+          key: blender-5.2.3-linux-x64
+      - name: Install runtime libraries for headless Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxi6 libxxf86vm1 libxfixes3 libxrender1 libxkbcommon0 libsm6 libice6 \
+            libgl1 libegl1 libx11-6 libxext6 libxcb1 libdecor-0-0 libgl1-mesa-dri
+      - name: Download Blender
+        if: steps.cache-blender.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .blender
+          curl -fsSL "https://download.blender.org/release/Blender5.2/blender-5.2.3-linux-x64.tar.xz" \
+            | tar -xJ -C .blender
+      - name: Render and compare
+        run: >
+          "$BLENDER_DIR/blender" -b --factory-startup --python-exit-code 1
+          --python tools/render_regression.py --
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-regression-output
+          path: tests/output/
+          if-no-files-found: warn
