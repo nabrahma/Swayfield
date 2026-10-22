@@ -153,9 +153,10 @@ def test_material_controls_applied(plane):
         pytest.skip("materials module not available yet")
     if not hasattr(materials, "set_control") or not hasattr(materials, "get_control"):
         pytest.skip("materials.set_control not available yet")
-    mat = bpy.data.materials.new("m")
-    presets.apply_material(mat, {"wind_brighten": 0.25})
+    mat = materials.create_layer_material("m")
+    presets.apply_material(mat, {"wind_brighten": 0.25, "color_tip": "#808080"})
     assert materials.get_control(mat, "wind_brighten") == pytest.approx(0.25)
+    assert materials.get_control(mat, "color_tip")[0] == pytest.approx(0.2159, abs=1e-3)
 
 
 def test_hex_round_trip():
