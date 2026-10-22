@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Version-independent access to Geometry Nodes modifier inputs.
 
-Blender 4.2 to 4.x store modifier input values as ID properties on the
+Blender 4.x stores modifier input values as ID properties on the
 modifier (``mod["Socket_2"]``). Blender 5.x moved them to
 ``mod.properties.inputs.Socket_2.value``. Everything in Swayfield goes through
 this module so the rest of the code never cares which one it runs on.

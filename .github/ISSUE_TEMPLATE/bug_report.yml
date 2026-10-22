@@ -17,7 +17,7 @@ body:
     id: blender-version
     attributes:
       label: Blender version
-      placeholder: "e.g. 4.2.3"
+      placeholder: "e.g. 4.5.15"
     validations:
       required: true
   - type: input

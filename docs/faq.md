@@ -2,7 +2,7 @@
 
 ## Which Blender versions work?
 
-Blender 4.2 LTS and newer. It was tested on Blender 5.2 LTS, and 4.2 LTS is verified by automated tests.
+Blender 4.5 LTS and newer. The test suite runs on Blender 4.5 LTS and 5.2 LTS in CI.
 
 ## Do I need Swayfield installed to render a file?
 

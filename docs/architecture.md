@@ -18,7 +18,7 @@ swayfield/                 the extension package (what ships)
   props.py                 PropertyGroups: UI state only
   core/
     spec.py                every modifier input (single source of truth)
-    compat.py              modifier input access for Blender 4.2 and 5.x
+    compat.py              modifier input access for Blender 4.5 and 5.x
     nodes/                 node groups as code, one module per stage
       builder.py           NodeBuilder helper
       __init__.py          ensure(stage), STAGES

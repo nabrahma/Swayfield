@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/nabrahma/Swayfield/actions/workflows/ci.yml/badge.svg)](https://github.com/nabrahma/Swayfield/actions/workflows/ci.yml)
 [![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Blender 4.2+](https://img.shields.io/badge/Blender-4.2%2B-orange.svg)](https://www.blender.org/)
+[![Blender 4.5+](https://img.shields.io/badge/Blender-4.5%2B-orange.svg)](https://www.blender.org/)
 
 <!-- TODO: hero GIF of the Rolling Meadow preset in motion -->
 
@@ -80,7 +80,7 @@ Presets are plain JSON files, and you can add your own. See [Presets](https://na
 
 ## Install
 
-Swayfield is a Blender 4.2+ extension.
+Swayfield is a Blender 4.5+ extension.
 
 1. Download the zip from [GitHub Releases](https://github.com/nabrahma/Swayfield/releases). Do not unzip it.
 2. In Blender, open **Edit > Preferences > Get Extensions**.
@@ -89,7 +89,7 @@ Swayfield is a Blender 4.2+ extension.
 
 Swayfield has no dependencies and makes no network calls.
 
-Tested on Blender 5.2 LTS. Blender 4.2 LTS is the declared minimum and is verified by CI.
+Tested in CI on Blender 4.5 LTS and 5.2 LTS. Blender 4.2 is not supported: two APIs Swayfield relies on (evaluated geometry and the Geometry Nodes bake operator) differ there.
 
 ## Documentation
 

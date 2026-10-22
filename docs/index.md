@@ -6,7 +6,7 @@ Select a mesh, click **Add Grass**, press play. Swayfield grows long, soft grass
 
 <!-- TODO: hero GIF of the Rolling Meadow preset -->
 
-This is version 0.1.0, the first public release. It runs on Blender 4.2 LTS and newer, and has been tested on Blender 5.2 LTS.
+This is version 0.1.0, the first public release. It runs on Blender 4.5 LTS and newer, and is tested on Blender 4.5 LTS and 5.2 LTS.
 
 ## Start here
 

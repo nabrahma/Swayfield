@@ -1,6 +1,6 @@
 # Installation
 
-Swayfield is a Blender extension. It needs **Blender 4.2 LTS or newer**. It has been tested on Blender 5.2 LTS, and 4.2 LTS is checked by automated tests.
+Swayfield is a Blender extension. It needs **Blender 4.5 LTS or newer**. The test suite runs on Blender 4.5 LTS and 5.2 LTS in CI.
 
 It needs no other software, no pip packages and no internet connection.
 

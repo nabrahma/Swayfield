@@ -17,7 +17,7 @@ Not sure where to start? Ask in [GitHub Discussions](https://github.com/nabrahma
    ```sh
    git clone https://github.com/nabrahma/Swayfield.git
    ```
-2. Install Blender 4.2 or newer.
+2. Install Blender 4.5 or newer.
 3. Link the `swayfield/` folder into Blender as a local extension. Either:
    - In Blender, go to **Preferences > Get Extensions > Repositories**, add a local repository, and point it at a folder that contains `swayfield/`, or
    - Symlink `swayfield` into that local repository folder.

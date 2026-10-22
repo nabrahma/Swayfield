@@ -7,7 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [0.1.0] - 2026-10-22
 
-First public release.
+First public release. Requires Blender 4.5 LTS or newer; tested on 4.5 LTS and 5.2 LTS.
 
 ### Added
 
