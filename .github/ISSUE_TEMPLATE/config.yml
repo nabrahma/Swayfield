@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://nabrahma.github.io/Swayfield/
+    about: Read the guides and reference before opening an issue.
+  - name: Questions and ideas
+    url: https://github.com/nabrahma/Swayfield/discussions
+    about: Ask questions and chat with other users in GitHub Discussions.
