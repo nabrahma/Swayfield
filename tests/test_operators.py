@@ -781,7 +781,9 @@ def test_quick_look(plane):
     assert forward.y > 0.95
     sun = bpy.data.objects["SF_Quick_Look_Sun"]
     assert sun.data.type == "SUN"
-    assert sun.data.energy == pytest.approx(4.0)
+    from swayfield.operators.scene import SUN_ENERGY
+
+    assert sun.data.energy == pytest.approx(SUN_ENERGY)
     assert sun.data.angle == pytest.approx(math.radians(3.0))
     assert sun.data.color[0] > sun.data.color[2], "warm"
     assert scene.view_settings.view_transform == "AgX"
@@ -808,3 +810,13 @@ def test_quick_look_feeds_the_camera_drivers(plane):
 def test_quick_look_needs_a_mesh(scene):
     with pytest.raises(RuntimeError):
         bpy.ops.swayfield.quick_look()
+
+
+def test_quick_look_keeps_the_users_world(plane):
+    own = bpy.data.worlds.new("My World")
+    bpy.context.scene.world = own
+    plane.select_set(True)
+    bpy.context.view_layer.objects.active = plane
+    assert bpy.ops.swayfield.quick_look() == {"FINISHED"}
+    assert bpy.context.scene.world.name == "SF_Quick_Look_World"
+    assert own.use_fake_user, "the replaced world must survive saving"

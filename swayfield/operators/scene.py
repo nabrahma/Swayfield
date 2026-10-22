@@ -18,6 +18,17 @@ CAMERA_HEIGHT = 1.0
 #: Identifier of the Punchy look; older Blender versions name it differently.
 LOOK_CANDIDATES = ("AgX - Punchy", "Punchy")
 
+# Late-afternoon light: a low warm sun skimming the field from the left (upwind for the default +X
+# wind), so flattened crests catch the light and the upright blades in the gaps fall into shade.
+# The sky is a dim gradient, so shadows stay dark and the greens stay saturated.
+SUN_ENERGY = 7.0
+SUN_COLOR = (1.0, 0.9, 0.72)
+SUN_ROTATION = (math.radians(64.0), 0.0, math.radians(260.0))  # 26 deg high, from the left (upwind)
+SKY_HORIZON = (0.80, 0.66, 0.48, 1.0)
+SKY_ZENITH = (0.16, 0.34, 0.80, 1.0)
+SKY_STRENGTH = 0.8
+EXPOSURE = 0.0
+
 
 def _surface_height(ob: bpy.types.Object, x: float, y: float, low_z: float, high_z: float) -> float:
     """World height of the surface at (x, y), or the bottom of its bounds when the ray misses."""
@@ -57,25 +68,45 @@ def _grade(scene: bpy.types.Scene) -> bool:
     return False
 
 
-def _sky(scene: bpy.types.Scene) -> None:
-    """Give the scene a soft blue sky when it has no world, so first renders are not black."""
-    if scene.world is not None:
-        return
-    world = bpy.data.worlds.new(WORLD_NAME)
+def _sky(scene: bpy.types.Scene) -> str | None:
+    """A late-afternoon gradient sky: warm pale horizon, deeper blue zenith.
+
+    Built from basic nodes (no Sky Texture) so it looks the same in EEVEE and Cycles on every
+    supported version. It is kept dim next to the sun, so blades in shadow stay dark.
+    """
+    world = bpy.data.worlds.get(WORLD_NAME) or bpy.data.worlds.new(WORLD_NAME)
     if world.node_tree is None and hasattr(world, "use_nodes"):
         world.use_nodes = True  # Blender 4.x; newer versions create the node tree themselves
-    background = world.node_tree.nodes.get("Background") if world.node_tree is not None else None
-    if background is not None:
-        background.inputs["Color"].default_value = (0.45, 0.62, 0.9, 1.0)
-        background.inputs["Strength"].default_value = 1.0
+    nt = world.node_tree
+    nt.nodes.clear()
+    coords = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    background = nt.nodes.new("ShaderNodeBackground")
+    output = nt.nodes.new("ShaderNodeOutputWorld")
+    nt.links.new(coords.outputs["Generated"], sep.inputs[0])
+    nt.links.new(sep.outputs["Z"], ramp.inputs["Fac"])
+    nt.links.new(ramp.outputs["Color"], background.inputs["Color"])
+    nt.links.new(background.outputs[0], output.inputs["Surface"])
+    stops = ramp.color_ramp.elements
+    stops[0].position, stops[0].color = 0.0, SKY_HORIZON
+    stops[1].position, stops[1].color = 0.3, SKY_ZENITH
+    background.inputs["Strength"].default_value = SKY_STRENGTH
+    for i, node in enumerate((coords, sep, ramp, background, output)):
+        node.location = (i * 250.0, 0.0)
+    previous = scene.world
+    if previous is not None and previous != world:
+        # Keep the user's own world in the file, so it is not purged on save once unassigned.
+        previous.use_fake_user = True
     scene.world = world
+    return previous.name if previous is not None and previous != world else None
 
 
 class SWAYFIELD_OT_quick_look(bpy.types.Operator):
     bl_idname = "swayfield.quick_look"
     bl_label = "Quick Look"
-    bl_description = ("Set up a test camera 1 m above the grass surface, a warm sun and the AgX Punchy look, "
-                      "so the first render looks good")
+    bl_description = ("Set up a test camera 1 m above the grass surface, a low warm sun, a sky and the AgX Punchy "
+                      "look, so the first render looks good")
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -104,18 +135,23 @@ class SWAYFIELD_OT_quick_look(bpy.types.Operator):
         drivers.check_cameras(force=True)  # grass layers pick up the new camera's lens
 
         sun_data = bpy.data.lights.get(SUN_NAME) or bpy.data.lights.new(SUN_NAME, "SUN")
-        sun_data.energy = 4.0
+        sun_data.energy = SUN_ENERGY
         sun_data.angle = math.radians(3.0)
-        sun_data.color = (1.0, 0.85, 0.65)
+        sun_data.color = SUN_COLOR
         sun = _ensure_object(scene, SUN_NAME, sun_data)
         sun.location = (centre_x, low.y, high.z + 10.0)
-        sun.rotation_euler = (math.radians(60.0), 0.0, math.radians(30.0))
+        sun.rotation_euler = SUN_ROTATION
 
-        _sky(scene)
+        previous_world = _sky(scene)
+        scene.view_settings.exposure = EXPOSURE
         if not _grade(scene):
             self.report({"WARNING"}, "The Punchy look is not available in this Blender version. "
                                      "Pick a look in Color Management")
-        self.report({"INFO"}, "Quick Look is ready. Press F12 to render")
+        if previous_world:
+            self.report({"INFO"}, f"Quick Look is ready. Press F12 to render. Your world \"{previous_world}\" "
+                                  "is kept; switch back in the World properties")
+        else:
+            self.report({"INFO"}, "Quick Look is ready. Press F12 to render")
         return {"FINISHED"}
 
 
