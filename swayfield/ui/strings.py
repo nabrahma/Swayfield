@@ -89,6 +89,7 @@ LBL_EFFECTOR_STRENGTH = "Strength"
 LBL_EFFECTOR_FALLOFF = "Falloff"
 LBL_TEXTURE_SLOT = "{slot}"
 LBL_MATERIAL_MODE = "Mode"
+LBL_NO_IMAGE = "none"
 LBL_PRESET_PICKER = "Grass Preset"
 
 # Titles for the paint map groups

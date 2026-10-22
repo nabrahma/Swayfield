@@ -10,7 +10,7 @@ import bpy
 
 from ..core import compat, spec
 from . import icons, strings
-from .lists import _op
+from .lists import _op, layer_modifier
 
 _MODE_NAMES = ("PROCEDURAL", "IMAGE", "SINGLE")
 INSTANCES_INDEX = 2
@@ -58,17 +58,25 @@ def _active_layer(ob):
 
 
 def _modifier(ob, layer):
-    mod = _call("layers", "get_modifier", ob, layer)
-    if mod is None:
-        mod = ob.modifiers.get(getattr(layer, "modifier_name", ""))
+    mod = layer_modifier(ob, layer)
     if mod is None or mod.type != "NODES" or mod.node_group is None:
         return None
     return mod
 
 
+def _surface(ob):
+    """The surface for the surface or its grass object, or None."""
+    if ob is None:
+        return None
+    fn = _core("layers", "surface_of")
+    if fn is not None:
+        return fn(ob)
+    return ob if getattr(ob, "swayfield", None) is not None else None
+
+
 def layer_state(context, need_modifier: bool = True) -> State | None:
     """Active object, layer and modifier, or None when any of them is missing."""
-    ob = getattr(context, "active_object", None)
+    ob = _surface(getattr(context, "active_object", None))
     if ob is None:
         return None
     layer = _active_layer(ob)
@@ -98,8 +106,8 @@ def draw_keys(layout: bpy.types.UILayout, st: State, keys, **kwargs) -> None:
                 layout.prop(st.layer, key, text=item.name)
             else:
                 compat.draw_input(layout, st.mod, key, **kwargs)
-        except Exception:
-            continue
+        except KeyError:
+            continue  # input missing from an older group version
 
 
 def _proxy(layout, st: State, key: str, text: str | None = None, **kwargs) -> None:
@@ -109,20 +117,6 @@ def _proxy(layout, st: State, key: str, text: str | None = None, **kwargs) -> No
 
 def _fmt(value) -> str:
     return f"{int(value):,}"
-
-
-def _as_number(value) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return value
-    if isinstance(value, dict):
-        for key in ("total", "viewport"):
-            if key in value:
-                return value[key]
-    if isinstance(value, (tuple, list)) and value and isinstance(value[0], (int, float)):
-        return value[0]
-    return None
 
 
 def _mode_index(value) -> int | None:
@@ -209,12 +203,12 @@ def _row_value(layout, label: str, value: str) -> None:
 
 
 def _draw_counter(layout: bpy.types.UILayout, context, st: State) -> None:
-    viewport = _as_number(_call("budget", "count_blades", st.ob, st.mod))
-    render = _as_number(_call("budget", "estimate_render_count", st.ob, st.mod))
-    total = _as_number(_call("budget", "scene_totals", context))
-    settings = getattr(context.scene, "swayfield", None)
-    budget = getattr(settings, "budget", None)
-    if viewport is None and render is None and total is None:
+    holder = st.mod.id_data
+    viewport = _call("budget", "count_blades", holder, st.mod)
+    render = _call("budget", "estimate_render_count", holder, st.mod)
+    totals = _call("budget", "scene_totals", context)
+    budget = getattr(getattr(context.scene, "swayfield", None), "budget", 0)
+    if viewport is None and render is None and totals is None:
         return
     box = layout.box()
     col = box.column(align=True)
@@ -222,11 +216,11 @@ def _draw_counter(layout: bpy.types.UILayout, context, st: State) -> None:
         _row_value(col, strings.LBL_VIEWPORT_BLADES, _fmt(viewport))
     if render is not None:
         _row_value(col, strings.LBL_RENDER_BLADES, _fmt(render))
-    if total is not None:
-        over = bool(budget) and total > budget
+    if totals is not None:
+        over = bool(budget) and totals.viewport > budget
         row = col.row()
         row.alert = over
-        text = _fmt(total) + (f" / {_fmt(budget)}" if budget else "")
+        text = _fmt(totals.viewport) + (f" / {_fmt(budget)}" if budget else "")
         _row_value(row, strings.LBL_SCENE_BLADES, text)
         if over:
             box.label(text=strings.HINT_OVER_BUDGET, icon=icons.ICON_WARNING)
@@ -242,19 +236,18 @@ class SWAYFIELD_PT_main(_Base, bpy.types.Panel):
         pointer = _op(layout, "swayfield.add_grass", text=strings.BTN_ADD_GRASS, icon=icons.ICON_ADD)
         wm = context.window_manager
         if pointer is not None and hasattr(wm, "swayfield_preset"):
-            try:
+            if wm.swayfield_preset != "NONE":
                 pointer.preset = wm.swayfield_preset
-            except Exception:
-                pass
         st = layer_state(context)
         ob = context.active_object
         if st is None:
-            if ob is None:
+            surface = _surface(ob)
+            if surface is not None and _active_layer(surface) is not None:
+                layout.label(text=strings.HINT_NO_MODIFIER, icon=icons.ICON_WARNING)
+            elif ob is None:
                 layout.label(text=strings.HINT_SELECT_MESH_THEN_ADD)
             elif ob.type != "MESH":
                 layout.label(text=strings.HINT_SELECT_MESH_FIRST)
-            elif _active_layer(ob) is not None:
-                layout.label(text=strings.HINT_NO_MODIFIER, icon=icons.ICON_WARNING)
             return
         draw_keys(layout, st, ("optimised",), toggle=True)
         _draw_counter(layout, context, st)
@@ -289,7 +282,7 @@ class SWAYFIELD_PT_layers(_Base, bpy.types.Panel):
 
     def draw(self, context) -> None:
         layout = self.layout
-        settings = context.active_object.swayfield
+        settings = _surface(context.active_object).swayfield
         row = layout.row()
         row.template_list("SWAYFIELD_UL_layers", "", settings, "layers", settings, "active_layer_index", rows=3)
         col = row.column(align=True)
@@ -431,7 +424,7 @@ class SWAYFIELD_MT_wind_presets(bpy.types.Menu):
         presets = _call("presets", "list_wind_presets", default=[]) or []
         for preset in presets:
             _op(self.layout, "swayfield.apply_wind_preset", text=str(preset.get("name", preset.get("id", " "))),
-                preset=preset.get("id", ""))
+                wind_id=preset.get("id", ""))
 
 
 def _wind_label(st: State) -> str:
@@ -513,7 +506,7 @@ def _draw_effector(layout: bpy.types.UILayout, ob) -> bool:
                       ("Strength", strings.LBL_EFFECTOR_STRENGTH), ("Falloff", strings.LBL_EFFECTOR_FALLOFF)):
         try:
             compat.draw_input(col, mod, key, text=text)
-        except Exception:
+        except KeyError:
             continue
     return True
 
@@ -554,22 +547,13 @@ def _draw_exclusion(layout: bpy.types.UILayout, st: State) -> None:
 
 def _control_socket(mat, key: str):
     """Socket whose ``default_value`` holds the control, or None."""
-    controls = _core("materials", "CONTROLS") or {}
-    entry = controls.get(key)
-    if entry is None or mat is None or mat.node_tree is None:
+    fn = _core("materials", "control_socket")
+    if fn is None:
         return None
-    node_name, socket = entry
-    node = mat.node_tree.nodes.get(node_name)
-    if node is None:
+    try:
+        return fn(mat, key)
+    except (KeyError, IndexError):
         return None
-    for collection in (node.inputs, node.outputs):
-        try:
-            sock = collection[socket]
-        except (KeyError, IndexError, TypeError):
-            continue
-        if hasattr(sock, "default_value"):
-            return sock
-    return None
 
 
 def _current_mode(st: State, mat) -> int | None:
@@ -584,9 +568,12 @@ def _draw_image_slots(layout: bpy.types.UILayout, mat) -> None:
         node = mat.node_tree.nodes.get(f"SF_Image_{slot}")
         if node is None:
             continue
-        col = layout.column(align=True)
-        col.label(text=strings.LBL_TEXTURE_SLOT.format(slot=slot))
-        col.template_ID(node, "image", open="image.open")
+        row = layout.row(align=True)
+        image = node.image
+        row.label(text=f"{slot}: {image.name if image is not None else strings.LBL_NO_IMAGE}")
+        _op(row, "swayfield.pick_image", text="", icon=icons.ICON_IMAGE, slot=slot)
+        if image is not None:
+            _op(row, "swayfield.clear_image", text="", icon=icons.ICON_REMOVE, slot=slot)
     _op(layout, "swayfield.load_texture_set", text=strings.BTN_LOAD_TEXTURE_SET, icon=icons.ICON_IMAGE)
 
 
@@ -608,11 +595,8 @@ class SWAYFIELD_PT_material(_LayerPanel, bpy.types.Panel):
             for key, entry in (_core("materials", "CONTROL_INFO") or {}).items():
                 if key == "mode":
                     continue
-                try:
-                    label, _kind, control_mode = entry
-                except (TypeError, ValueError):
-                    continue
-                if control_mode is not None and _mode_index(control_mode) != mode:
+                label, _kind, control_mode = entry
+                if control_mode is not None and control_mode != mode:
                     continue
                 sock = _control_socket(mat, key)
                 if sock is not None:

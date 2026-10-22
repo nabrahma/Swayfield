@@ -9,18 +9,30 @@ from . import icons, strings
 
 
 def _op(layout: bpy.types.UILayout, idname: str, text: str = "", icon: str = "NONE", **props):
-    """Draw an operator button if it is registered; returns the operator pointer or None."""
+    """Draw an operator button. Unknown property names raise; an unregistered operator draws nothing."""
     try:
         getattr(bpy.ops.swayfield, idname.split(".")[1]).get_rna_type()
-    except Exception:
+    except (KeyError, AttributeError):
         return None
     pointer = layout.operator(idname, text=text, icon=icon)
     for key, value in props.items():
-        try:
-            setattr(pointer, key, value)
-        except Exception:
-            pass
+        setattr(pointer, key, value)
     return pointer
+
+
+def layer_modifier(ob, layer):
+    """The layer's modifier (on its grass object), or None."""
+    try:
+        from ..core import layers
+
+        mod = layers.get_modifier(ob, layer)
+        if mod is not None:
+            return mod
+    except Exception:
+        pass
+    grass = getattr(layer, "grass_object", None)
+    holder = grass if grass is not None else ob
+    return holder.modifiers.get(layer.modifier_name)
 
 
 class SWAYFIELD_UL_layers(bpy.types.UIList):
@@ -30,7 +42,7 @@ class SWAYFIELD_UL_layers(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         ob = data.id_data
-        mod = ob.modifiers.get(item.modifier_name) if ob is not None else None
+        mod = layer_modifier(ob, item) if ob is not None else None
         row = layout.row(align=True)
         row.prop(item, "name", text="", emboss=False)
         sub = row.row(align=True)
