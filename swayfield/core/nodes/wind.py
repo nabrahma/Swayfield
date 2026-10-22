@@ -23,8 +23,13 @@ angle at its midpoint and the segments are summed again from the root
 Rigid sway (Toon Bob, Force Rigid, Animation LOD) rotates the whole blade
 about its root instead. Custom instances rock rigidly with Rotate Instances.
 
-``sf_wind`` (bend amount 0..1) is stored on the points (on the instances for
-Custom Instances) for shading. Point count and order never change.
+``sf_wind`` is stored on the points (on the instances for Custom Instances)
+for shading. It means how far a blade is flattened beyond its steady lean:
+``rest = clamp(intensity x sf_wind_scale x shelter x base_lean)`` and
+``x = clamp((clamp(|wind|) - rest) / max(1 - rest, 0.05))`` and
+``sf_wind = smoothstep(x) ^ 1.5``. 0 is the steady lean (or no wind), 1 is fully
+flattened by a gust or an effector; the shaping keeps most of the field dark so
+gusts read as bright streaks with dark gaps. Point count and order never change.
 """
 
 from __future__ import annotations
@@ -47,6 +52,8 @@ INPUT_KEYS = tuple(i.key for i in spec.inputs_in_panel("Wind")) + (
 FORCE_RIGID = "Force Rigid"
 #: Share of max bend a rigidly swaying blade turns by at full strength.
 RIGID_FACTOR = 0.6
+#: Exponent applied to the smoothstepped sf_wind, so streaks read with dark gaps.
+GUST_SHAPE = 1.5
 #: Frame rate assumed at frame 0 only, where Scene Time cannot tell it (loop mode).
 FALLBACK_FPS = 24.0
 _RIGID = spec.get("sway_mode").item_index("RIGID")
@@ -108,6 +115,8 @@ class _Field:
         gain = b.math("MULTIPLY", b.inp("intensity"), read_attr(b, spec.ATTR_WIND_SCALE, "FLOAT", 1.0))
         #: Intensity x shelter paint x shelter effectors.
         self.gain = b.math("MULTIPLY", gain, builder.find_socket(eff.outputs, "Shelter"))
+        #: Bend amount of the steady lean alone; sf_wind measures flattening beyond it.
+        self.rest = b.math("MULTIPLY", self.gain, b.inp("base_lean"), clamp=True)
 
     # -- time-dependent components -------------------------------------------
 
@@ -209,6 +218,14 @@ def bend_rotation(b, up, wind, flutter):
     return b.vmath("ADD", scale(b, axis, b.math("MULTIPLY", amount, b.inp("max_bend"))), flutter), amount
 
 
+def gust_amount(b, amount, rest):
+    """``sf_wind``: bend amount beyond the steady lean ``rest``, remapped to 0..1."""
+    span = b.math("MAXIMUM", b.math("SUBTRACT", 1.0, rest), 0.05)
+    beyond = b.math("DIVIDE", b.math("SUBTRACT", amount, rest), span, clamp=True)
+    # Smoothstep, then ^1.5: most of the field stays dark and gust crests stay bright.
+    return b.math("POWER", b.map_range(beyond, interpolation="SMOOTHSTEP"), GUST_SHAPE)
+
+
 def capture(b, geometry, domain: str, items):
     """Capture several fields on ``domain`` in one evaluation, so shared parts are computed once.
 
@@ -237,11 +254,13 @@ def _curve_wind(b, time, curves):
                       0.0, 1.0, interpolation="SMOOTHSTEP")
     far = b.switch("FLOAT", b.inp("anim_lod_enable"), 0.0, far)
     # The field is evaluated once per blade (curve domain), not per point.
-    wind_root, wind_tip, flutter = _Field(b, time, root, up).vectors()
+    field = _Field(b, time, root, up)
+    wind_root, wind_tip, flutter = field.vectors()
     curves, per_blade = capture(b, curves, "CURVE", [
         ("VECTOR", "Wind Root", wind_root), ("VECTOR", "Wind Tip", wind_tip),
-        ("VECTOR", "Flutter", flutter), ("FLOAT", "Far", far)])
-    wind_root, wind_tip, flutter, far = (per_blade[k] for k in ("Wind Root", "Wind Tip", "Flutter", "Far"))
+        ("VECTOR", "Flutter", flutter), ("FLOAT", "Far", far), ("FLOAT", "Rest", field.rest)])
+    wind_root, wind_tip, flutter, far, rest = (per_blade[k] for k in ("Wind Root", "Wind Tip", "Flutter", "Far",
+                                                                      "Rest"))
     pos = b.out("GeometryNodeInputPosition")
 
     # Rigid: the whole blade turns about its root.
@@ -249,7 +268,7 @@ def _curve_wind(b, time, curves):
     rigid_pos = b.out("ShaderNodeVectorRotate", {
         "Vector": pos, "Center": root, "Axis": b.vmath("NORMALIZE", rotation),
         "Angle": b.math("MULTIPLY", b.vmath("LENGTH", rotation), RIGID_FACTOR)}, rotation_type="AXIS_ANGLE")
-    rigid = b.store(curves, spec.ATTR_WIND, amount)
+    rigid = b.store(curves, spec.ATTR_WIND, gust_amount(b, amount, rest))
     rigid = b.out("GeometryNodeSetPosition", {"Geometry": rigid, "Position": rigid_pos})
 
     # Bend: rotate each segment by the bend at its midpoint, then re-sum from the root.
@@ -276,7 +295,7 @@ def _curve_wind(b, time, curves):
     acc = b.node("GeometryNodeAccumulateField", {"Value": segment}, data_type="FLOAT_VECTOR", domain="POINT")
     b.link(b.out("GeometryNodeCurveOfPoint"), acc.inputs[1])
     bent_pos = b.vmath("ADD", root, builder.find_socket(acc.outputs, "Leading"))
-    bent = b.store(curves, spec.ATTR_WIND, amount)
+    bent = b.store(curves, spec.ATTR_WIND, gust_amount(b, amount, rest))
     bent = b.out("GeometryNodeSetPosition", {"Geometry": bent, "Position": bent_pos})
     return bent, rigid
 
@@ -285,10 +304,11 @@ def _instance_wind(b, time, instances):
     """Custom instances rock rigidly about their own origin; they stay instances."""
     root = b.out("GeometryNodeInputPosition")
     up = b.vmath("NORMALIZE", read_attr(b, spec.ATTR_UP, "FLOAT_VECTOR", (0.0, 0.0, 1.0)))
-    wind_root, _tip, flutter = _Field(b, time, root, up).vectors()
+    field = _Field(b, time, root, up)
+    wind_root, _tip, flutter = field.vectors()
     rotation, amount = bend_rotation(b, up, wind_root, flutter)
-    instances, sway = capture(b, instances, "INSTANCE",
-                              [("VECTOR", "Rotation", rotation), ("FLOAT", "Amount", amount)])
+    instances, sway = capture(b, instances, "INSTANCE", [("VECTOR", "Rotation", rotation),
+                                                         ("FLOAT", "Amount", gust_amount(b, amount, field.rest))])
     rotation = sway["Rotation"]
     rot = b.out("FunctionNodeAxisAngleToRotation", {
         "Axis": b.vmath("NORMALIZE", rotation),

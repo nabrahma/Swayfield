@@ -124,7 +124,7 @@ half and read downstream:
 | `sf_mask` | surface point | Masks | final density 0–1, for Mask Preview |
 
 Blade attributes (on curve points, carried to ribbons) read by materials:
-`sf_factor` (root 0 → tip 1), `sf_wind` (bend amount 0–1), plus `sf_random`,
+`sf_factor` (root 0 → tip 1), `sf_wind` (flattening beyond the steady lean, 0–1), plus `sf_random`,
 `sf_variation`, `sf_clump`, `sf_dist` propagated from the points. These six are
 the public attributes users can read in their own shaders.
 
@@ -148,7 +148,9 @@ the root with Accumulate Field, so blades keep their exact length. Rotating
 points about the root instead would stretch strongly bent blades. Tips
 sample the field `tip_lag` seconds earlier. Loop mode samples the field at
 `t' = t mod L` and `t' − L` and blends by `t' / L`, so frame L + 1 matches
-frame 1. `sf_wind` (bend amount) is stored for shading.
+frame 1. `sf_wind` is stored for shading: how far a blade is flattened beyond
+the steady lean (0 = resting at the steady lean, 1 = fully flattened by a gust
+or effector), shaped so most of the field stays dark and gust crests glow.
 
 Custom Instances are never realised: they rock rigidly with Rotate Instances.
 

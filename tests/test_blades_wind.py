@@ -317,13 +317,15 @@ def test_loop_is_exact(scene):
 
 
 def test_freeze_holds_pose(scene):
-    ob, _, _ = _setup(count=(5, 5), wind={"freeze": True, "time_offset": 3.0})
+    ob, _, wind = _setup(count=(5, 5), wind={"freeze": True, "time_offset": 3.0})
     _frame(1)
     a, _ = _read(ob)
     _frame(37)
-    b, attrs = _read(ob, spec.ATTR_WIND)
+    b, _ = _read(ob)
     assert np.array_equal(a, b)
-    assert attrs[spec.ATTR_WIND].max() > 0.3  # frozen, not switched off
+    wind.mute = True
+    rest, _ = _read(ob)
+    assert np.abs(b - rest).max() > 0.1  # frozen, not switched off
 
 
 def test_mute_viewport_gives_rest_pose(scene):
@@ -416,8 +418,22 @@ def test_rolling_meadow_defaults(scene):
     tangent = bent[ends] - bent[ends - 1]
     tilt = np.degrees(np.arccos(tangent[:, 2] / np.linalg.norm(tangent, axis=1)))
     assert tilt.max() > 70.0
-    strength = attrs[spec.ATTR_WIND][ends]
-    assert strength.min() >= 0.55 and strength.max() > 0.9  # base lean 0.6 plus gusts
+
+
+def test_sf_wind_reads_as_gust_streaks(scene):
+    # sf_wind is flattening beyond the steady lean: mostly dark gaps, bright gust crests.
+    ob, _, wind = _setup(size=(60.0, 60.0), count=(61, 61))
+    for frame in (1, 60):
+        _frame(frame)
+        _, attrs = _read(ob, spec.ATTR_WIND)
+        amount = attrs[spec.ATTR_WIND]
+        assert 0.0 <= amount.min() and amount.max() <= 1.0
+        p10, p50, p90 = np.percentile(amount, [10, 50, 90])
+        assert p10 < 0.1 and p50 < 0.5 and p90 > 0.7
+    # Steady lean alone (no gusts, waves or effectors) is not "flattened": sf_wind stays 0.
+    wind.inputs["Gust Strength"].default_value = 0.0
+    _, attrs = _read(ob, spec.ATTR_WIND)
+    assert np.allclose(attrs[spec.ATTR_WIND], 0.0, atol=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -518,9 +534,25 @@ def test_trample_parts_and_flattens(scene):
 def test_shelter_calms_wind(scene):
     _, coll = _effector("Shelter", "SHELTER", radius=1.5, strength=1.0, falloff=0.2)
     ob, _, wind = _setup(size=(8.0, 8.0), count=(9, 9), wind={"effector_collection": coll})
-    co, attrs = _read(ob, spec.ATTR_WIND)
-    starts = _curve_starts(attrs[CURVE])
-    r = np.linalg.norm(co[starts, :2], axis=1)
-    amount = attrs[spec.ATTR_WIND][starts]
-    assert amount[r < 0.5].max() < 0.05
-    assert amount[r > 2.0].min() > 0.5
+    wind.mute = True
+    rest, attrs = _read(ob)
+    wind.mute = False
+    bent, attrs = _read(ob, spec.ATTR_WIND)
+    curves = attrs[CURVE]
+    starts = _curve_starts(curves)
+    r = np.linalg.norm(rest[starts, :2], axis=1)
+    move = np.linalg.norm(_tips(bent, curves) - _tips(rest, curves), axis=1)
+    assert move[r < 0.5].max() < 0.02
+    assert move[r > 2.0].min() > 0.1
+    assert attrs[spec.ATTR_WIND][starts][r < 0.5].max() < 0.05
+
+
+def test_effector_flattening_shows_in_sf_wind(scene):
+    # With no steady wind, a vortex's push is all "beyond the steady lean".
+    move, roots = _effector_motion(scene, "VORTEX")
+    ob = bpy.data.objects["SF_Test"]
+    _, attrs = _read(ob, spec.ATTR_WIND)
+    root_amount = attrs[spec.ATTR_WIND][_curve_starts(attrs[CURVE])]
+    r = np.linalg.norm(roots[:, :2], axis=1)
+    assert root_amount[(r > 0.3) & (r < 1.0)].min() > 0.5
+    assert root_amount[r > 3.2].max() < 1e-6
