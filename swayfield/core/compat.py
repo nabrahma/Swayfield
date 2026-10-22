@@ -65,8 +65,8 @@ def set_input(mod: bpy.types.Modifier, key: str, value) -> None:
         getattr(mod.properties.inputs, ident).value = value
     else:
         mod[ident] = value
-    # Blender 4.x does not tag the modifier for re-evaluation on ID property writes.
-    if not uses_properties_api(mod) and mod.id_data is not None:
+    # Neither API tags the object for re-evaluation when written from Python.
+    if mod.id_data is not None:
         mod.id_data.update_tag()
 
 
