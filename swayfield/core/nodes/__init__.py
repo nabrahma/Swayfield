@@ -19,7 +19,7 @@ import bpy
 from . import builder
 
 #: Pipeline order. ``main`` wires the others together.
-STAGES = ("distribute", "masks", "cull", "blade", "effectors", "wind", "store", "main")
+STAGES = ("masks", "distribute", "cull", "blade", "effector_point", "effectors", "wind", "store", "main")
 
 
 def _module(stage: str):
