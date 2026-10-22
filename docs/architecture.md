@@ -84,7 +84,7 @@ All geometry is in world space. "Spec inputs" are `spec.Input` keys.
 | `SF_Blade_v1` | `Points` | `Blades` (curves, or instances for Custom Instances) | `blade_source`, `instance_*`, `length_*`, `root_width`, `tip_taper`, `rest_lean`, `curl`, `random_tilt`, `random_rotation`, `blade_points`, `lod_mid_points`, `lod_far_points`, `clump_pull`, `wisp_length`, `wisp_width` | `Force Lite` (bool: 3 points per blade) |
 | `SF_Effectors_v1` | – (field group) | `Force` vector field, `Flatten` float field | `effector_collection` | `Position` vector field |
 | `SF_Wind_v1` | `Blades` | `Blades` | all `Wind` panel inputs except `mute_viewport` handled inside, `anim_lod_*`, `effector_collection` | `Force Rigid` (bool) |
-| `SF_Store_v1` | `Blades` | `Grass` | `blade_source`, `material`, `instance_material_override`, `root_width`, `tip_taper` | – |
+| `SF_Store_v1` | `Blades` | `Grass` | `blade_source`, `material`, `instance_material_override` | – |
 | `SF_EffectorPoint_v1` | effector object mesh | one point with `sf_type`, `sf_radius`, `sf_strength`, `sf_falloff` | – | `Type` (int), `Radius`, `Strength`, `Falloff` |
 
 `Force Lite` and `Force Rigid` are computed by Main from Optimised Mode,
@@ -137,6 +137,14 @@ sample the field `tip_lag` seconds earlier. Loop mode samples the field at
 frame 1. `sf_wind` (bend amount) is stored for shading.
 
 Custom Instances are never realised: they rock rigidly with Rotate Instances.
+
+### Ribbons
+
+Store converts curves to ribbons with Curve to Mesh. The strip's width runs
+perpendicular to the blade's bend plane (curve normal = `normalize(lean × up)`
+in Free mode), so blades fold like real leaves: the face is vertical at the
+root and turns toward the sky where the blade bends over, which is what makes
+flattened crests catch the light. Ribbon width is twice the curve radius.
 
 ### Effectors
 
@@ -192,7 +200,10 @@ UI and presets can address them:
 | `image_wind` | wind brightening strength over image maps | 0.6 |
 
 Image slots are Image Texture nodes named `SF_Image_<Slot>` for
-`BaseColor`, `Roughness`, `Normal`, `Opacity`, `Translucency` and `AO`.
+`BaseColor`, `Roughness`, `Normal`, `Opacity`, `Translucency` and `AO`. Each
+slot is switched on by a Value node `SF_Has_<Slot>` so an empty slot falls
+back to neutral values. `assign_image`, `load_texture_set` and
+`sync_image_flags(mat)` keep the flags in sync with the image nodes.
 
 ## Python side
 
