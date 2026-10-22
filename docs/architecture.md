@@ -216,8 +216,8 @@ UI and presets can address them:
 | `color_mid` | mid colour | #3F7A12 |
 | `color_tip` | lit tip colour | #8BD63A |
 | `color_haze` | far-field haze colour | #5E8F31 |
-| `color_highlight` | colour flattened (windy) grass brightens toward | lighter tip colour |
-| `wind_brighten` | wind brightening strength (MT-03) | 0.6 |
+| `color_highlight` | colour flattened (windy) grass brightens toward | #C4F25A |
+| `wind_brighten` | wind brightening strength (MT-03): `sf_wind` is remapped with a smoothstep from 0.4 to 0.95, and calm blades are darkened, so crests glow against dark gaps | 0.6 |
 | `hue_jitter` | per-blade hue variation | 0.03 |
 | `value_jitter` | per-blade value variation | 0.15 |
 | `color_variation` | tint for `sf_variation` (dry patches) | straw yellow |

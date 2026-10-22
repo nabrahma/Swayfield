@@ -71,7 +71,7 @@ _DEFS: dict[str, tuple[str, str, str, int | None, object]] = {
     "color_root": ("SF_ColorRoot", "Root", "COLOR", None, "#0B3A05"),
     "color_mid": ("SF_ColorMid", "Middle", "COLOR", None, "#3F7A12"),
     "color_tip": ("SF_ColorTip", "Tip", "COLOR", None, "#8BD63A"),
-    "color_highlight": ("SF_ColorHighlight", "Wind Highlight", "COLOR", None, "#C9F27A"),
+    "color_highlight": ("SF_ColorHighlight", "Wind Highlight", "COLOR", None, "#C4F25A"),
     "wind_brighten": ("SF_WindBrighten", "Wind Brightening", "FACTOR", _P, 0.6),
     "hue_jitter": ("SF_HueJitter", "Hue Variation", "FACTOR", None, 0.03),
     "value_jitter": ("SF_ValueJitter", "Value Variation", "FACTOR", None, 0.15),
@@ -99,6 +99,12 @@ CONTROLS: dict[str, tuple[str, str | int]] = {key: (d[0], 0) for key, d in _DEFS
 CONTROL_INFO: dict[str, tuple[str, str, int | None]] = {key: (d[1], d[2], d[3]) for key, d in _DEFS.items()}
 
 DEFAULTS: dict[str, object] = {key: d[4] for key, d in _DEFS.items()}
+
+#: sf_wind values mapped to "upright" (no glow) and "flattened" (full glow).
+WIND_CALM = 0.4
+WIND_FLAT = 0.95
+#: How much darker calm blades get, per unit of wind brightening.
+GAP_DARKEN = 0.6
 
 _NON_COLOR_SLOTS = {"Roughness", "Normal", "Opacity", "Translucency", "AO"}
 
@@ -328,8 +334,16 @@ def _build_tree(mat) -> None:
     dry = b.vmath("SCALE", c["color_variation"], scale=b.map_range(factor, 0.0, 1.0, 0.25, 1.0))
     gradient = _mix_color(b, b.math("MULTIPLY", variation, c["variation_strength"], clamp=True), gradient, dry)
 
+    # Wind (MT-03). sf_wind is high almost everywhere under a steady lean, so it is remapped with a
+    # smoothstep before it drives the lerp: only the flattened crests glow, and the upright blades in
+    # the gaps between gusts get darker by the same strength. That contrast is what makes streaks read.
+    gust = b.map_range(wind, WIND_CALM, WIND_FLAT, 0.0, 1.0, interpolation="SMOOTHSTEP")
+    calm = b.math("SUBTRACT", 1.0, gust)
+
     def wind_brighten(color, strength):
-        return _mix_color(b, b.math("MULTIPLY", wind, strength, clamp=True), color, c["color_highlight"])
+        shade = b.math("MULTIPLY_ADD", calm, b.math("MULTIPLY", strength, -GAP_DARKEN), 1.0)
+        color = b.vmath("SCALE", color, scale=shade)
+        return _mix_color(b, b.math("MULTIPLY", gust, strength, clamp=True), color, c["color_highlight"])
 
     haze_amount = b.math("MULTIPLY", b.map_range(dist, c["haze_start"], c["haze_end"], 0.0, 1.0),
                          c["haze_strength"], clamp=True)

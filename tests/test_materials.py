@@ -3,13 +3,11 @@ import os
 
 import bpy
 import pytest
+from conftest import evaluated
 
 from swayfield.core import materials, spec
 from swayfield.core.nodes import builder, store
 from swayfield.core.nodes.builder import NodeBuilder, add_socket
-
-from conftest import evaluated
-
 
 # ---------------------------------------------------------------------------
 # Material
@@ -207,7 +205,7 @@ def test_store_ribbons(scene):
 
     # Width at the root is 2 x radius, across the bend plane (Y); faces turn up where the blade bends over.
     co = [v.co for v in mesh.vertices]
-    root = [c for c, f in zip(co, factor.data) if f.value == 0.0][:2]
+    root = [c for c, f in zip(co, factor.data, strict=False) if f.value == 0.0][:2]
     assert (root[0] - root[1]).length == pytest.approx(0.01, abs=1e-4)
     assert abs((root[0] - root[1]).y) == pytest.approx(0.01, abs=1e-4)
     normals = [p.normal for p in mesh.polygons[:POINTS - 1]]
@@ -242,3 +240,17 @@ def test_store_instances(scene, override):
     assert len(meshes) == BLADES
     has_mat = mat.name in [m.name for m in meshes[0].materials if m]
     assert has_mat == override
+
+
+def test_wind_brightening_is_remapped(scene):
+    """Only flattened blades glow: sf_wind goes through a smoothstep before the highlight lerp."""
+    mat = materials.create_layer_material("Grass")
+    assert materials.linear_to_hex(materials.get_control(mat, "color_highlight")) == "#C4F25A"
+    remaps = [n for n in mat.node_tree.nodes if n.bl_idname == "ShaderNodeMapRange"
+              and n.interpolation_type == "SMOOTHSTEP"
+              and any(link.from_node.bl_idname == "ShaderNodeAttribute"
+                      and link.from_node.attribute_name == spec.ATTR_WIND for link in n.inputs[0].links)]
+    assert len(remaps) == 1
+    node = remaps[0]
+    assert node.inputs["From Min"].default_value == pytest.approx(materials.WIND_CALM)
+    assert node.inputs["From Max"].default_value == pytest.approx(materials.WIND_FLAT)

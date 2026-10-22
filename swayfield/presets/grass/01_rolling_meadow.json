@@ -17,6 +17,9 @@
     "color_mid": "#3F7A12",
     "color_tip": "#8BD63A",
     "color_haze": "#5E8F31",
+    "color_highlight": "#C4F25A",
+    "translucency": 0.35,
+    "value_jitter": 0.25,
     "wind_brighten": 0.6
   }
 }
