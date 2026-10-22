@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "id": "WILD_FIELD",
+  "name": "Wild Field",
+  "description": "Tall, uneven meadow with strong clumping and patchy colour.",
+  "wind": "GENTLE_BREEZE",
+  "inputs": {
+    "density": 900.0,
+    "density_ceiling": 1100.0,
+    "length_min": 0.3,
+    "length_max": 1.2,
+    "clump_density": 12.0,
+    "clump_radius": 0.25,
+    "clump_pull": 0.5,
+    "rest_lean": 14.0,
+    "wisp_percent": 4.0
+  },
+  "material": {
+    "color_root": "#0B3A05",
+    "color_mid": "#3F7A12",
+    "color_tip": "#8BD63A",
+    "color_haze": "#5E8F31",
+    "hue_jitter": 0.08,
+    "value_jitter": 0.25,
+    "variation_strength": 0.7,
+    "color_variation": "#B8A33A",
+    "wind_brighten": 0.4
+  }
+}

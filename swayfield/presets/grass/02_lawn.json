@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "id": "LAWN",
+  "name": "Lawn",
+  "description": "Short, dense lawn for architectural visualisation. Turns on Optimised Mode for the viewport.",
+  "wind": "GENTLE_BREEZE",
+  "inputs": {
+    "density": 6000.0,
+    "density_ceiling": 6500.0,
+    "min_distance": 0.002,
+    "length_min": 0.05,
+    "length_max": 0.1,
+    "root_width": 0.002,
+    "tip_taper": 0.6,
+    "rest_lean": 3.0,
+    "curl": 5.0,
+    "random_tilt": 6.0,
+    "blade_points": 4,
+    "clump_density": 0.0,
+    "wisp_percent": 0.0,
+    "base_lean": 0.08,
+    "max_bend": 25.0,
+    "optimised": true,
+    "viewport_density": 15.0
+  },
+  "material": {
+    "color_root": "#12400A",
+    "color_mid": "#4A8A1A",
+    "color_tip": "#7FC236",
+    "color_haze": "#5E8F31",
+    "wind_brighten": 0.3
+  }
+}

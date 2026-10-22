@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "id": "STORMY_STEPPE",
+  "name": "Stormy Steppe",
+  "description": "Dry, sun-bleached grass flattened by a storm.",
+  "wind": "STORM",
+  "inputs": {
+    "density": 1200.0,
+    "density_ceiling": 1400.0,
+    "length_min": 0.4,
+    "length_max": 0.8,
+    "rest_lean": 16.0,
+    "wisp_percent": 5.0
+  },
+  "material": {
+    "color_root": "#2B2A0B",
+    "color_mid": "#7A6A22",
+    "color_tip": "#C9B25A",
+    "color_haze": "#8F8750",
+    "color_highlight": "#E6D79A",
+    "color_variation": "#A58A3A",
+    "variation_strength": 0.6,
+    "wind_brighten": 0.8
+  }
+}

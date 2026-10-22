@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "ROLLING_MEADOW",
+  "name": "Rolling Meadow",
+  "description": "The reference look: long, dense grass with wisps, in a strong crosswind.",
+  "wind": "ROLLING_MEADOW",
+  "inputs": {
+    "density": 1500.0,
+    "density_ceiling": 1800.0,
+    "length_min": 0.5,
+    "length_max": 0.9,
+    "wisp_percent": 4.0,
+    "clump_pull": 0.1
+  },
+  "material": {
+    "color_root": "#0B3A05",
+    "color_mid": "#3F7A12",
+    "color_tip": "#8BD63A",
+    "color_haze": "#5E8F31",
+    "wind_brighten": 0.6
+  }
+}

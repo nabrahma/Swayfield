@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "id": "GENTLE_BREEZE",
+  "name": "Gentle Breeze",
+  "description": "Calm sway with small, slow gusts and soft flutter. Grass stays upright.",
+  "effector": null,
+  "inputs": {
+    "intensity": 1.0,
+    "base_lean": 0.15,
+    "gust_strength": 0.15,
+    "gust_scale": 0.35,
+    "gust_stretch": 2.0,
+    "gust_speed": 1.5,
+    "gust_evolution": 0.1,
+    "gust_contrast": 1.2,
+    "direction_variation": 0.0,
+    "direction_variation_speed": 0.3,
+    "wave_strength": 0.0,
+    "wave_length": 4.0,
+    "wave_speed": 2.0,
+    "wave_sharpness": 0.5,
+    "flutter_strength": 0.04,
+    "flutter_frequency": 2.0,
+    "wisp_flutter": 1.5,
+    "max_bend": 45.0,
+    "stiffness": 1.8,
+    "tip_lag": 0.2,
+    "sway_mode": 0,
+    "speed_multiplier": 1.0
+  },
+  "material": {
+    "wind_brighten": 0.3
+  }
+}

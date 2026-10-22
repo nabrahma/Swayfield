@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "id": "ANIME_FIELD",
+  "name": "Anime Field",
+  "description": "Stylised field in one saturated colour with regular rolling waves.",
+  "wind": "ROLLING_WAVES",
+  "inputs": {
+    "density": 1000.0,
+    "density_ceiling": 1200.0,
+    "length_min": 0.4,
+    "length_max": 0.6,
+    "tip_taper": 0.8,
+    "curl": 30.0,
+    "rest_lean": 6.0,
+    "random_tilt": 5.0,
+    "wisp_percent": 0.0
+  },
+  "material": {
+    "mode": 2,
+    "single_color": "#4FD02A",
+    "single_variation": 0.15,
+    "single_roughness": 0.6,
+    "wind_brighten": 0.6
+  }
+}
