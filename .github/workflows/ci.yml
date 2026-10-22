@@ -94,7 +94,7 @@ jobs:
         run: '"$BLENDER_DIR/blender" --command extension validate swayfield'
       - name: Build extension
         run: python3 tools/build.py --blender "$BLENDER_DIR/blender"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: swayfield-extension
           path: dist/*.zip

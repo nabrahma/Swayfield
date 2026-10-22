@@ -35,7 +35,7 @@ jobs:
         run: >
           "$BLENDER_DIR/blender" -b --factory-startup --python-exit-code 1
           --python tools/render_regression.py --
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: render-regression-output
