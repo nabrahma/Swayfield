@@ -1,0 +1,25 @@
+schema_version = "1.0.0"
+
+id = "swayfield"
+version = "0.1.0"
+name = "Swayfield"
+tagline = "One-click animated grass with art-directable wind"
+maintainer = "Nabaskar Brahma"
+type = "add-on"
+
+website = "https://github.com/nabrahma/Swayfield"
+
+tags = ["Geometry Nodes", "Animation", "Object"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 Nabaskar Brahma"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "*.pyc",
+  ".*",
+  "*.zip",
+]
