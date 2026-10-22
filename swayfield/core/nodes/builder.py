@@ -333,9 +333,12 @@ class NodeBuilder:
         columns: dict[int, list] = {}
         for n in nodes:
             columns.setdefault(depth[n.name], []).append(n)
+        location = {}
         for col, members in columns.items():
             for row, n in enumerate(members):
-                n.location = (col * x_step, -row * y_step)
+                location[n.name] = (col * x_step, -row * y_step)
+        # One bulk write: setting node.location one by one is quadratic in tree size.
+        self.tree.nodes.foreach_set("location", [v for n in self.tree.nodes for v in location[n.name]])
 
 
 def ensure_group(name: str, tree_type: str = "GeometryNodeTree"):
