@@ -82,10 +82,10 @@ All geometry is in world space. "Spec inputs" are `spec.Input` keys.
 | `SF_Distribute_v1` | `Surface` from Masks | `Points` | `seed`, `seed_offset`, `density`, `density_ceiling`, `min_distance`, `orient_normal`, `clump_density`, `clump_radius`, `wisp_percent`, `length_falloff` | – |
 | `SF_Cull_v1` | `Points` | `Points` | `optimised`, `viewport_density`, `simplify`, `frustum_cull`, `render_cull`, `cull_margin_*`, `cull_fov_override`, `cam_*`, `res_x`, `res_y`, `lod_*` (not `lod_*_points`) | – |
 | `SF_Blade_v1` | `Points` | `Blades` (curves, or instances for Custom Instances) | `blade_source`, `instance_*`, `length_*`, `root_width`, `tip_taper`, `rest_lean`, `curl`, `random_tilt`, `random_rotation`, `blade_points`, `lod_mid_points`, `lod_far_points`, `clump_pull`, `wisp_length`, `wisp_width` | `Force Lite` (bool: 3 points per blade) |
-| `SF_Effectors_v1` | – (field group) | `Force` vector field, `Flatten` float field | `effector_collection` | `Position` vector field |
+| `SF_Effectors_v1` | – (field group) | `Force` vector field, `Flatten` float field, `Shelter` float field (1 = no shelter) | `effector_collection` | `Position` vector field |
 | `SF_Wind_v1` | `Blades` | `Blades` | all `Wind` panel inputs except `mute_viewport` handled inside, `anim_lod_*`, `effector_collection` | `Force Rigid` (bool) |
 | `SF_Store_v1` | `Blades` | `Grass` | `blade_source`, `material`, `instance_material_override` | – |
-| `SF_EffectorPoint_v1` | effector object mesh | one point with `sf_type`, `sf_radius`, `sf_strength`, `sf_falloff` | – | `Type` (int), `Radius`, `Strength`, `Falloff` |
+| `SF_EffectorPoint_v1` | `Geometry` (effector object mesh) | one point with `sf_type`, `sf_radius`, `sf_strength`, `sf_falloff` | – | `Type` (int), `Radius`, `Strength`, `Falloff` |
 
 `Force Lite` and `Force Rigid` are computed by Main from Optimised Mode,
 `display_mode` and Is Viewport.
@@ -129,9 +129,11 @@ density, Simplify and LOD bands thin again in Cull, using a hash of `id`.
 
 Every frame each blade samples a wind vector: base lean + gust field (noise
 stretched along the wind and scrolled at gust speed) + waves + flutter
-(tip-weighted) + effector forces. Each curve point is rotated about the blade
-root with Vector Rotate (axis angle), angle =
-`strength × max_bend × factor^stiffness`, so blades keep their length. Tips
+(tip-weighted) + effector forces. Each blade segment is rotated by the bend at
+its midpoint (Vector Rotate, axis angle about `cross(sf_up, wind)`, angle =
+`strength × max_bend × factor^stiffness`) and the segments are re-summed from
+the root with Accumulate Field, so blades keep their exact length. Rotating
+points about the root instead would stretch strongly bent blades. Tips
 sample the field `tip_lag` seconds earlier. Loop mode samples the field at
 `t' = t mod L` and `t' − L` and blends by `t' / L`, so frame L + 1 matches
 frame 1. `sf_wind` (bend amount) is stored for shading.
@@ -155,7 +157,10 @@ attributes. `SF_Effectors_v1` reads them through Collection Info. Because the
 values are modifier inputs, they can be keyframed (a Radial Blast pulse) and
 need no Python at render time.
 
-Types: `0` Vortex, `1` Radial Blast, `2` Trample, `3` Shelter.
+Types: `0` Vortex, `1` Radial Blast, `2` Trample, `3` Shelter. Every
+effector is summed (a Repeat zone over the effector points), using horizontal
+distance. The settings point is a point cloud and the viewport circle a mesh;
+`SF_Effectors_v1` reads only point clouds.
 
 ### Camera data
 
