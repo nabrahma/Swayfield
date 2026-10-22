@@ -67,6 +67,8 @@ BTN_ADD_SHELTER = "Shelter"
 BTN_ADD_EXCLUSION = "Add Exclusion"
 BTN_SELECT = "Select"
 BTN_LOAD_TEXTURE_SET = "Load Texture Set"
+BTN_SAVE_PRESET = "Save Preset…"
+MENU_DELETE_PRESET = "Delete User Preset"
 BTN_BAKE_SCATTER = "Bake Scatter"
 BTN_FREE_BAKE = "Free Bake"
 

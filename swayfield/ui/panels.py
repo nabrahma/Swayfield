@@ -301,7 +301,7 @@ class SWAYFIELD_PT_layers(_Base, bpy.types.Panel):
         label = _call("layers", "preset_label", st.ob, st.layer)
         if label is None:
             label = strings.LBL_CUSTOM if st.layer.preset in ("", "CUSTOM") else st.layer.preset
-        layout.label(text=f"{strings.LBL_PRESET}: {label}")
+        layout.menu("SWAYFIELD_MT_grass_presets", text=f"{strings.LBL_PRESET}: {label}")
         if _call("versioning", "needs_upgrade", st.mod, default=False):
             _op(layout, "swayfield.upgrade_layer", text=strings.BTN_UPGRADE_LAYER, icon=icons.ICON_UPGRADE)
         if _has_linked_layer(st.ob, st.layer):
@@ -416,15 +416,58 @@ class SWAYFIELD_PT_masks(_LayerPanel, bpy.types.Panel):
 # ---------------------------------------------------------------------------
 
 
+def _draw_preset_menu(layout, kind: str, apply_op: str, id_prop: str, delete_menu: str) -> None:
+    """Apply entries for every preset, then Save and (when there are user presets) Delete."""
+    lister = "list_grass_presets" if kind == "GRASS" else "list_wind_presets"
+    presets = _call("presets", lister, default=[]) or []
+    for preset in presets:
+        _op(layout, apply_op, text=str(preset.get("name", preset.get("id", " "))), **{id_prop: preset.get("id", "")})
+    layout.separator()
+    _op(layout, "swayfield.save_preset", text=strings.BTN_SAVE_PRESET, icon=icons.ICON_ADD, kind=kind)
+    if any(not p.get("builtin", True) for p in presets):
+        layout.menu(delete_menu, text=strings.MENU_DELETE_PRESET, icon=icons.ICON_FREE)
+
+
+def _draw_delete_menu(layout, kind: str) -> None:
+    lister = "list_grass_presets" if kind == "GRASS" else "list_wind_presets"
+    for preset in _call("presets", lister, default=[]) or []:
+        if not preset.get("builtin", True):
+            _op(layout, "swayfield.delete_preset", text=str(preset.get("name", preset.get("id", " "))),
+                preset_id=preset.get("id", ""), kind=kind)
+
+
+class SWAYFIELD_MT_grass_presets(bpy.types.Menu):
+    bl_idname = "SWAYFIELD_MT_grass_presets"
+    bl_label = strings.LBL_PRESET
+
+    def draw(self, context) -> None:
+        _draw_preset_menu(self.layout, "GRASS", "swayfield.apply_preset", "preset_id",
+                          "SWAYFIELD_MT_delete_grass_preset")
+
+
+class SWAYFIELD_MT_delete_grass_preset(bpy.types.Menu):
+    bl_idname = "SWAYFIELD_MT_delete_grass_preset"
+    bl_label = strings.MENU_DELETE_PRESET
+
+    def draw(self, context) -> None:
+        _draw_delete_menu(self.layout, "GRASS")
+
+
 class SWAYFIELD_MT_wind_presets(bpy.types.Menu):
     bl_idname = "SWAYFIELD_MT_wind_presets"
     bl_label = strings.LBL_WIND_TYPE
 
     def draw(self, context) -> None:
-        presets = _call("presets", "list_wind_presets", default=[]) or []
-        for preset in presets:
-            _op(self.layout, "swayfield.apply_wind_preset", text=str(preset.get("name", preset.get("id", " "))),
-                wind_id=preset.get("id", ""))
+        _draw_preset_menu(self.layout, "WIND", "swayfield.apply_wind_preset", "wind_id",
+                          "SWAYFIELD_MT_delete_wind_preset")
+
+
+class SWAYFIELD_MT_delete_wind_preset(bpy.types.Menu):
+    bl_idname = "SWAYFIELD_MT_delete_wind_preset"
+    bl_label = strings.MENU_DELETE_PRESET
+
+    def draw(self, context) -> None:
+        _draw_delete_menu(self.layout, "WIND")
 
 
 def _wind_label(st: State) -> str:
@@ -686,4 +729,6 @@ def _ordered_classes() -> tuple:
     return tuple(result)
 
 
-CLASSES = (SWAYFIELD_OT_select_object, SWAYFIELD_MT_add_mask, SWAYFIELD_MT_wind_presets, *_ordered_classes())
+CLASSES = (SWAYFIELD_OT_select_object, SWAYFIELD_MT_add_mask, SWAYFIELD_MT_grass_presets,
+           SWAYFIELD_MT_delete_grass_preset, SWAYFIELD_MT_wind_presets, SWAYFIELD_MT_delete_wind_preset,
+           *_ordered_classes())

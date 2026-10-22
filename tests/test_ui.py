@@ -279,3 +279,21 @@ def test_image_operators(plane):
     assert bpy.ops.swayfield.clear_image(slot="Roughness") == {"FINISHED"}
     assert materials.image_node(mat, "Roughness").image is None
     assert materials._flag_socket(mat, "Roughness").default_value == 0.0
+
+
+def test_draw_preset_menus_with_user_presets(plane, tmp_path, monkeypatch):
+    from swayfield.core import layers, presets
+
+    monkeypatch.setattr(presets, "user_dir", lambda: tmp_path)
+    layer, mod = _add_grass(plane)
+    presets.save_user_preset("GRASS", "My Meadow", mod, layers.layer_material(plane, layer))
+    presets.save_user_preset("WIND", "My Wind", mod, layers.layer_material(plane, layer))
+    for cls in (panels.SWAYFIELD_MT_grass_presets, panels.SWAYFIELD_MT_delete_grass_preset,
+                panels.SWAYFIELD_MT_wind_presets, panels.SWAYFIELD_MT_delete_wind_preset):
+        fake = FakePanel()
+        cls.draw(fake, bpy.context)
+        ops = [c[1] for c in fake.layout.calls if c[0] == "operator"]
+        if "delete" in cls.__name__:
+            assert ops == ["swayfield.delete_preset"], cls.__name__
+        else:
+            assert "swayfield.save_preset" in ops, cls.__name__
