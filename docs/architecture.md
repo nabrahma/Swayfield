@@ -91,7 +91,7 @@ All geometry is in world space. "Spec inputs" are `spec.Input` keys.
 | Group | Geometry in | Geometry out | Spec inputs (keys) | Extra inputs |
 | --- | --- | --- | --- | --- |
 | `SF_Masks_v1` | `Surface` mesh | `Surface` mesh with point-domain attributes `sf_mask`, `sf_length`, `sf_wind_scale`, `sf_variation` | all `Masks` panel inputs, `exclusion_*` | – |
-| `SF_Distribute_v1` | `Surface` from Masks | `Points` | `seed`, `seed_offset`, `density`, `density_ceiling`, `min_distance`, `orient_normal`, `clump_density`, `clump_radius`, `wisp_percent`, `length_falloff` | – |
+| `SF_Distribute_v1` | `Surface` from Masks | `Points` | `seed`, `seed_offset`, `density`, `density_ceiling`, `min_distance`, `orient_normal`, `clump_density`, `clump_radius`, `wisp_percent`, `length_falloff`, `optimised`, `viewport_density`, `simplify` | – |
 | `SF_Cull_v1` | `Points` | `Points` | `optimised`, `viewport_density`, `simplify`, `frustum_cull`, `render_cull`, `cull_margin_*`, `cull_fov_override`, `cam_*`, `res_x`, `res_y`, `lod_*` (not `lod_*_points`) | – |
 | `SF_Blade_v1` | `Points` | `Blades` (curves, or instances for Custom Instances) | `blade_source`, `instance_*`, `length_*`, `root_width`, `tip_taper`, `rest_lean`, `curl`, `random_tilt`, `random_rotation`, `blade_points`, `lod_mid_points`, `lod_far_points`, `clump_pull`, `wisp_length`, `wisp_width` | `Force Lite` (bool: 3 points per blade) |
 | `SF_Effectors_v1` | – (field group) | `Force` vector field, `Flatten` float field, `Shelter` float field (1 = no shelter) | `effector_collection` | `Position` vector field |
@@ -134,8 +134,16 @@ Blades are distributed once with Poisson disk at `density_ceiling` and then
 thinned. Distribute's *Density Factor* is
 `sf_mask × density / density_ceiling`; Blender eliminates points by a
 per-point random value that does not depend on the factor, so lowering density
-or painting removes blades without moving the remaining ones (SC-05). Viewport
-density, Simplify and LOD bands thin again in Cull, using a hash of `id`.
+or painting removes blades without moving the remaining ones (SC-05).
+
+In the viewport, Optimised Mode's Viewport Density and Blender's Simplify are
+applied at distribution time: Density Max becomes
+`density_ceiling × viewport share` and the min-distance pass is skipped, which
+is almost all of the cost (a 50 m field drops from about 12 s to 0.1 s).
+Points carry the share already applied (`sf_viewport_share`), so Cull thins
+only what is left to thin; a full-density bake still thins to a stable subset.
+Renders always distribute at full density, so render positions never depend
+on viewport settings. LOD bands thin again in Cull using a hash of `id`.
 
 ### Wind
 

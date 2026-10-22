@@ -4,9 +4,12 @@
 Every removal uses a hash of ``id``, so each one keeps a stable subset of
 blades and the same blades survive from frame to frame.
 
-* Viewport thinning (viewport only, via Is Viewport): keep
-  ``random(id) < simplify × viewport_density`` (viewport density only in
-  Optimised Mode). Survivors widen by ``sqrt(1 / kept share)``, at most 3×.
+* Viewport thinning (viewport only, via Is Viewport) to
+  ``share = simplify × viewport_density`` (viewport density only in
+  Optimised Mode). SF_Distribute normally does it already by distributing
+  fewer points, and marks them with the share it applied; this stage keeps
+  ``random(id) < share / applied`` for the rest (a scatter baked at full
+  density). Blades widen by ``sqrt(1 / share)``, at most 3×.
 * Frustum culling: in the viewport with Optimised Mode and Camera Culling, at
   render with Render Culling. Needs an active camera. The frame is the lens
   frustum from the driven ``cam_*``/``res_*`` inputs (or Culling FOV Override),
@@ -27,6 +30,7 @@ from __future__ import annotations
 
 from .. import spec
 from . import builder
+from .distribute import ATTR_SHARE, viewport_share
 from .masks import active_camera
 
 NAME = "SF_Cull_v1"
@@ -64,11 +68,12 @@ def build(tree) -> None:
     position = b.out("GeometryNodeInputPosition")
     dist = b.switch("FLOAT", has_camera, 0.0, b.vmath("DISTANCE", position, camera.outputs["Location"]))
 
-    # Viewport thinning: one hash for Simplify and Viewport Density.
-    share = b.switch("FLOAT", b.inp("optimised"), 1.0, b.math("DIVIDE", b.inp("viewport_density"), 100.0))
-    share = b.math("MULTIPLY", b.inp("simplify"), share, clamp=True)
-    share = b.switch("FLOAT", is_viewport, 1.0, share)
-    keep = b.compare("LESS_THAN", b.random_float(blade_id, SEED_THIN, max_value=_RAND_MAX), share)
+    # Viewport thinning left over after SF_Distribute: one hash for Simplify and Viewport Density.
+    share = viewport_share(b, is_viewport)
+    applied, has_applied = b.named_attribute(ATTR_SHARE)
+    applied = b.switch("FLOAT", has_applied, 1.0, b.math("MAXIMUM", applied, 1.0e-6))
+    keep = b.compare("LESS_THAN", b.random_float(blade_id, SEED_THIN, max_value=_RAND_MAX),
+                     b.math("DIVIDE", share, applied))
     widen = b.math("MINIMUM", b.math("SQRT", b.math("DIVIDE", 1.0, b.math("MAXIMUM", share, 1.0e-6))), MAX_WIDEN)
 
     # LOD bands.
@@ -98,12 +103,31 @@ def build(tree) -> None:
     band = b.math("ADD", past_near, past_mid)
     band_width = b.switch("FLOAT", past_mid, b.switch("FLOAT", past_near, 1.0, b.inp("lod_mid_width")),
                           b.inp("lod_far_width"))
+    points = _remove_quietly(b, points, ATTR_SHARE)
     points = b.store(points, spec.ATTR_DIST, dist)
     points = b.store(points, spec.ATTR_LOD, b.switch("FLOAT", lod_on, 0.0, band), data_type="INT")
     points = b.store(points, spec.ATTR_WIDTH, b.math("MULTIPLY", b.switch("FLOAT", lod_on, 1.0, band_width), widen))
 
     b.output("Points", points)
     b.arrange()
+
+
+def _remove_quietly(b: builder.NodeBuilder, geometry, name: str):
+    """Remove ``name`` if present, without a missing-attribute warning in the modifier panel.
+
+    A wildcard pattern that matches nothing is silent; an exact name is not.
+    """
+    node = b.node("GeometryNodeRemoveAttribute", {"Geometry": geometry})
+    mode = node.inputs.get("Pattern Mode")
+    if mode is not None:
+        mode.default_value = "Wildcard"  # 5.x: menu socket
+    elif hasattr(node, "pattern_mode"):
+        node.pattern_mode = "WILDCARD"
+    else:
+        node.inputs["Name"].default_value = name
+        return node.outputs["Geometry"]
+    node.inputs["Name"].default_value = name + "*"
+    return node.outputs["Geometry"]
 
 
 def _in_frustum(b: builder.NodeBuilder, cam_matrix, is_viewport, position):

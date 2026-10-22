@@ -14,6 +14,17 @@ Surface point attributes from SF_Masks (``sf_mask``, ``sf_length``,
 ``sf_wind_scale``, ``sf_variation``) are interpolated onto the points by the
 distribute node.
 
+Viewport thinning happens here, not in SF_Cull, because the Poisson pass
+costs time per *generated* point. In the viewport (Is Viewport) Density Max is
+``density_ceiling × share``, with ``share = simplify × viewport_density / 100``
+(viewport density only in Optimised Mode). Optimised Mode also skips the
+minimum-distance pass in the viewport: it is most of the cost, and overlapping
+roots do not show at viewport densities. Within a fixed share the layout is
+still stable under painting and Density. Renders always use the full set.
+Reduced points carry ``ATTR_SHARE`` (the share already applied), so SF_Cull
+thins only by what is left, for example when the scatter was baked at full
+density.
+
 Clumps (SC-08) are random points at Clump Density on the same surface. Each
 blade takes its nearest centre within Clump Radius; blades farther away are
 their own clump (centre = own position, ``sf_clump`` = ``sf_random``).
@@ -29,7 +40,11 @@ NAME = "SF_Distribute_v1"
 INPUT_KEYS: tuple[str, ...] = (
     "seed", "seed_offset", "density", "density_ceiling", "min_distance", "orient_normal",
     "clump_density", "clump_radius", "wisp_percent", "length_falloff",
+    "optimised", "viewport_density", "simplify",
 )
+
+#: Point attribute on viewport-reduced points: the share of Generation Density kept (internal).
+ATTR_SHARE = "sf_viewport_share"
 
 #: Fixed Random Value seeds, one per purpose, so the values are independent.
 SEED_RANDOM = 1
@@ -49,15 +64,21 @@ def build(tree) -> None:
     # Seeds are below 2^24, so the float add is exact before the int conversion.
     seed = b.math("ADD", b.inp("seed"), b.inp("seed_offset"))
 
+    is_viewport = b.out("GeometryNodeIsViewport")
+    share = viewport_share(b, is_viewport)
+    fast = b.boolean("AND", is_viewport, b.inp("optimised"))
+
     thin = b.math("MINIMUM", b.math("DIVIDE", b.inp("density"), b.inp("density_ceiling")), 1.0)
     dist = b.node("GeometryNodeDistributePointsOnFaces", {
         "Mesh": surface,
-        "Distance Min": b.inp("min_distance"),
-        "Density Max": b.inp("density_ceiling"),
+        "Distance Min": b.switch("FLOAT", fast, b.inp("min_distance"), 0.0),
+        "Density Max": b.math("MULTIPLY", b.inp("density_ceiling"), share),
         "Density Factor": b.math("MULTIPLY", _attr_or(b, spec.ATTR_MASK, 1.0), thin),
         "Seed": seed,
     }, distribute_method="POISSON")
     points = dist.outputs["Points"]
+    reduced = b.compare("LESS_THAN", share, 1.0)
+    points = b.switch("GEOMETRY", reduced, points, b.store(points, ATTR_SHARE, share))
 
     # SC-10: growth direction between world up and the surface normal.
     up = b.mix(b.inp("orient_normal"), (0.0, 0.0, 1.0), dist.outputs["Normal"], data_type="VECTOR")
@@ -81,6 +102,13 @@ def build(tree) -> None:
 
     b.output("Points", points)
     b.arrange()
+
+
+def viewport_share(b: builder.NodeBuilder, is_viewport):
+    """Share of blades shown: ``simplify × viewport_density / 100`` in the viewport, 1 at render."""
+    share = b.switch("FLOAT", b.inp("optimised"), 1.0, b.math("DIVIDE", b.inp("viewport_density"), 100.0))
+    share = b.math("MULTIPLY", b.inp("simplify"), share, clamp=True)
+    return b.switch("FLOAT", is_viewport, 1.0, share)
 
 
 def _attr_or(b: builder.NodeBuilder, name: str, default: float):

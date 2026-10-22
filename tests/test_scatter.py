@@ -36,7 +36,12 @@ def _transform(b: builder.NodeBuilder, geometry, matrix):
     return node.outputs[0]
 
 
-def _wrapper(with_cull: bool = True):
+def _wrapper(with_cull: bool = True, raw: bool = False):
+    """Masks, Distribute and Cull between world-space transforms.
+
+    ``raw=True`` feeds Cull from a plain Distribute Points on Faces node
+    instead, like a scatter baked at full density.
+    """
     tree = bpy.data.node_groups.new("SF_TestScatter", "GeometryNodeTree")
     builder.add_socket(tree, "Geometry", "GEOMETRY", "INPUT")
     builder.add_spec_inputs(tree, KEYS)
@@ -44,8 +49,12 @@ def _wrapper(with_cull: bool = True):
     b = builder.NodeBuilder(tree)
     info = b.node("GeometryNodeObjectInfo", {"Object": b.out("GeometryNodeSelfObject")}, transform_space="ORIGINAL")
     geo = _transform(b, b.inp("Geometry"), info.outputs["Transform"])
-    geo = b.group(nodes.ensure("masks", rebuild=True), {"Surface": geo}).outputs["Surface"]
-    geo = b.group(nodes.ensure("distribute", rebuild=True), {"Surface": geo}).outputs["Points"]
+    if raw:
+        geo = b.out("GeometryNodeDistributePointsOnFaces", {"Mesh": geo, "Density Max": b.inp("density")},
+                    distribute_method="POISSON")
+    else:
+        geo = b.group(nodes.ensure("masks", rebuild=True), {"Surface": geo}).outputs["Surface"]
+        geo = b.group(nodes.ensure("distribute", rebuild=True), {"Surface": geo}).outputs["Points"]
     if with_cull:
         geo = b.group(nodes.ensure("cull", rebuild=True), {"Points": geo}).outputs["Points"]
     inverse = b.out("FunctionNodeInvertMatrix", {"Matrix": info.outputs["Transform"]}, output="Matrix")
@@ -55,9 +64,9 @@ def _wrapper(with_cull: bool = True):
     return tree
 
 
-def _scatter(ob, with_cull: bool = True, **values):
+def _scatter(ob, with_cull: bool = True, raw: bool = False, **values):
     mod = ob.modifiers.new("Swayfield", "NODES")
-    mod.node_group = _wrapper(with_cull)
+    mod.node_group = _wrapper(with_cull, raw)
     _set(ob, **{**FAST, **values})
     return mod
 
@@ -380,10 +389,9 @@ def test_camera_distance_mask(plane, camera):
 
 
 def test_camera_masks_are_neutral_without_camera(plane):
-    _scatter(plane)
+    _scatter(plane, optimised=True, viewport_density=100.0)
     full = len(_points(plane)["co"])
-    _set(plane, camdist_enable=True, camdist_max=1.0, optimised=True, viewport_density=100.0, frustum_cull=True,
-         lod_far=1.0)
+    _set(plane, camdist_enable=True, camdist_max=1.0, frustum_cull=True, lod_far=1.0)
     pts = _points(plane)
     assert len(pts["co"]) == full
     assert np.all(pts[spec.ATTR_DIST] == 0.0) and np.all(pts[spec.ATTR_LOD] == 0)
@@ -393,21 +401,58 @@ def test_camera_masks_are_neutral_without_camera(plane):
 # Culling
 # ---------------------------------------------------------------------------
 
-def test_viewport_thinning_is_a_stable_widened_subset(plane):
+def test_viewport_density_reduces_the_distribution(plane):
     _scatter(plane)
+    full = len(_points(plane)["co"])
+    _set(plane, optimised=True, viewport_density=25.0)
+    pts = _points(plane)
+    assert 0.2 < len(pts["co"]) / full < 0.3  # thinned once, not again in Cull
+    assert np.allclose(pts[spec.ATTR_WIDTH], 2.0, atol=1e-4)
+    assert distribute.ATTR_SHARE not in pts
+    # Simplify also applies outside Optimised Mode.
+    _set(plane, optimised=False, simplify=0.5)
+    pts = _points(plane)
+    assert 0.45 < len(pts["co"]) / full < 0.55
+    assert np.allclose(pts[spec.ATTR_WIDTH], math.sqrt(2.0), atol=1e-4)
+    _set(plane, viewport_density=1.0, optimised=True, simplify=1.0)
+    assert np.allclose(_points(plane)[spec.ATTR_WIDTH], 3.0)  # widening is capped
+
+
+def test_reduced_viewport_layout_is_stable(plane):
+    group = plane.vertex_groups.new(name="SF_Base_density")
+    every = list(range(len(plane.data.vertices)))
+    group.add(every, 1.0, "REPLACE")
+    _scatter(plane, density_group=group.name, optimised=True, viewport_density=20.0)
+    before = _by_id(_points(plane))
+    _set(plane, density=50.0)
+    lower = _by_id(_points(plane))
+    assert 0.4 < len(lower) / len(before) < 0.6
+    assert all(before.get(i) == co for i, co in lower.items())
+    group.add(every[: len(every) // 2], 0.0, "REPLACE")
+    plane.data.update()
+    painted = _by_id(_points(plane))
+    assert 0 < len(painted) < len(lower)
+    assert all(before.get(i) == co for i, co in painted.items())
+
+
+def test_cull_thins_points_that_were_not_reduced(plane):
+    _scatter(plane, raw=True)
     full = _by_id(_points(plane))
     _set(plane, optimised=True, viewport_density=25.0)
     pts = _points(plane)
     kept = _by_id(pts)
     assert 0.2 < len(kept) / len(full) < 0.3
-    assert all(full.get(i) == co for i, co in kept.items())
+    assert all(full.get(i) == co for i, co in kept.items())  # a stable subset
     assert np.allclose(pts[spec.ATTR_WIDTH], 2.0, atol=1e-4)
-    # Simplify also applies outside Optimised Mode, with the same hash.
-    _set(plane, optimised=False, simplify=0.5)
-    half = _by_id(_points(plane))
-    assert set(kept) <= set(half)
-    _set(plane, viewport_density=1.0, optimised=True, simplify=1.0)
-    assert np.allclose(_points(plane)[spec.ATTR_WIDTH], 3.0)  # widening is capped
+
+
+@pytest.mark.parametrize("optimised", [False, True])
+def test_no_node_warnings_by_default(plane, camera, optimised):
+    mod = _scatter(plane, optimised=optimised)
+    _points(plane)
+    if not hasattr(mod, "node_warnings"):
+        pytest.skip("modifier node warnings are not exposed in this Blender version")
+    assert [w.message for w in mod.node_warnings] == []
 
 
 def test_background_evaluation_counts_as_viewport(plane):
@@ -469,16 +514,17 @@ def test_render_culling_does_not_touch_the_viewport(plane):
 def test_render_skips_viewport_thinning_and_uses_render_culling(plane):
     _forward_camera()
     _scatter(plane, lod_enable=False)
-    full = len(_points(plane)["co"])  # Optimised Mode off: no viewport culling
+    full = _by_id(_points(plane))  # Optimised Mode off: no viewport culling
     _set(plane, optimised=True, viewport_density=10.0, simplify=0.5, frustum_cull=True, render_cull=False,
          cull_margin_viewport=200.0, cull_margin_render=0.0)
-    assert len(_points(plane)["co"]) < 0.1 * full
+    assert len(_points(plane)["co"]) < 0.1 * len(full)
     pts = _render_points(plane)
-    assert len(pts["co"]) == full and np.allclose(pts[spec.ATTR_WIDTH], 1.0)
+    assert _by_id(pts) == full  # same blades at the same positions
+    assert np.allclose(pts[spec.ATTR_WIDTH], 1.0)
 
     _set(plane, render_cull=True)
     co = _render_points(plane)["co"]
-    assert 0 < len(co) < 0.7 * full
+    assert 0 < len(co) < 0.7 * len(full)
     tan_x = 18.0 / 50.0  # render margin 0, not the 200 % viewport margin
     radius = cull.BLADE_RADIUS * math.sqrt(1 + tan_x ** 2)
     assert np.all(np.abs(co[:, 0]) <= tan_x * co[:, 1] + radius + 1e-3)
