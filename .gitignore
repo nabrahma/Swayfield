@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Test dependencies installed into Blender's Python by tools/run_tests.py
+.blender-deps/
+
+# Build output
+dist/
+*.zip
+
+# Blender
+*.blend1
+*.blend2
+
+# Test and benchmark artefacts
+tests/output/
+benchmarks/results/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
