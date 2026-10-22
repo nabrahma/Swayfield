@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import importlib
-from typing import Callable, NamedTuple
+from collections.abc import Callable
+from typing import NamedTuple
 
 import bpy
 

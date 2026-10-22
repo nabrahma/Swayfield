@@ -240,10 +240,11 @@ def test_instances_stay_instances(scene):
     ev = _evaluated(ob)
     assert len(ev.data.vertices) == 0  # nothing realised
     # Rigid sway turns instances about their own origin: they stay on the grid, but tilt.
-    for a, b in zip(rest, swayed):
+    for a, b in zip(rest, swayed, strict=False):
         assert (a.translation - b.translation).length < 1e-5
     up = Vector((0.0, 0.0, 1.0))
-    tilt = [(a.to_3x3() @ up).normalized().dot((b.to_3x3() @ up).normalized()) for a, b in zip(rest, swayed)]
+    tilt = [(a.to_3x3() @ up).normalized().dot((b.to_3x3() @ up).normalized())
+            for a, b in zip(rest, swayed, strict=False)]
     assert min(tilt) < math.cos(math.radians(20))
     if hasattr(ev, "evaluated_geometry"):  # Blender 4.4+
         geometry = ev.evaluated_geometry()  # keep it alive while the cloud is read

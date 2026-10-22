@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import bpy
 
-from . import icons, strings
+from . import icons
 
 
 def _op(layout: bpy.types.UILayout, idname: str, text: str = "", icon: str = "NONE", **props):

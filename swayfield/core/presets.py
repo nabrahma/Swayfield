@@ -132,7 +132,7 @@ def _num(value) -> bool:
 # ---------------------------------------------------------------------------
 
 def _read(path: Path) -> dict:
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         return json.load(fh)
 
 

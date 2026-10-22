@@ -61,7 +61,7 @@ def _add_driver(ob: bpy.types.Object, mod: bpy.types.Modifier, scene: bpy.types.
     fcurve = ob.driver_add(data_path)
     driver = fcurve.driver
     driver.type = "SCRIPTED"
-    for name, path in zip(("v", "s"), paths):
+    for name, path in zip(("v", "s"), paths, strict=False):
         var = driver.variables.new()
         var.name = name
         var.type = "SINGLE_PROP"

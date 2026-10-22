@@ -87,7 +87,7 @@ def _restore_drivers(ob: bpy.types.Object, mod: bpy.types.Modifier, old_ids: dic
             var = driver.variables.new()
             var.name = var_data["name"]
             var.type = var_data["type"]
-            for target, t in zip(var.targets, var_data["targets"]):
+            for target, t in zip(var.targets, var_data["targets"], strict=False):
                 if t["id_type"]:
                     target.id_type = t["id_type"]
                 target.id = t["id"]

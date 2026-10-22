@@ -133,7 +133,9 @@ def test_operator_is_registered_with_undo(name):
 
 def test_operator_flags():
     from swayfield import operators
-    from swayfield.operators import add_grass as ag, bake, effectors, layers as layer_ops, paint, scene
+    from swayfield.operators import add_grass as ag
+    from swayfield.operators import bake, effectors, paint, scene
+    from swayfield.operators import layers as layer_ops
 
     for module in (ag, bake, effectors, layer_ops, paint, scene):
         for cls in module.classes:

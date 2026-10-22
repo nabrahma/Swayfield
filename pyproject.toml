@@ -14,6 +14,8 @@ extend-exclude = [".blender-deps", "dist"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+# UP038 (X | Y in isinstance) is deprecated upstream and slower at runtime.
+ignore = ["UP038"]
 
 [tool.ruff.lint.isort]
 known-third-party = ["bpy", "mathutils", "bmesh", "gpu", "bpy_extras"]

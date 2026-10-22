@@ -10,8 +10,7 @@ and setters read and write the modifier input (or the material mode) through
 # annotations at registration time and needs real property objects.
 
 import bpy
-from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, IntProperty, PointerProperty,
-                       StringProperty)
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
 
 from .core import compat, spec
 

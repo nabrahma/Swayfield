@@ -124,8 +124,8 @@ class SWAYFIELD_OT_add_exclusion(bpy.types.Operator):
 def world_bounds(ob: bpy.types.Object) -> tuple[Vector, Vector]:
     """Minimum and maximum corner of the object's bounding box in world space."""
     corners = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
-    low = Vector((min(c[i] for c in corners) for i in range(3)))
-    high = Vector((max(c[i] for c in corners) for i in range(3)))
+    low = Vector(min(c[i] for c in corners) for i in range(3))
+    high = Vector(max(c[i] for c in corners) for i in range(3))
     return low, high
 
 

@@ -135,7 +135,7 @@ def _read(me) -> dict:
 
 
 def _by_id(pts) -> dict:
-    return {int(i): tuple(np.round(c, 5)) for i, c in zip(pts["id"], pts["co"])}
+    return {int(i): tuple(np.round(c, 5)) for i, c in zip(pts["id"], pts["co"], strict=False)}
 
 
 def _collection(name: str, *objects):

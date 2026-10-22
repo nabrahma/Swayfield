@@ -39,8 +39,17 @@ from __future__ import annotations
 from .. import spec
 from . import builder
 from .blade import read_attr
-from .wind_parts import (RIGID_FACTOR, bend_group, bend_rotation, capture, field_group, gust_amount, rigid_group,
-                         time_group, up_vector)
+from .wind_parts import (
+    RIGID_FACTOR,
+    bend_group,
+    bend_rotation,
+    capture,
+    field_group,
+    gust_amount,
+    rigid_group,
+    time_group,
+    up_vector,
+)
 
 NAME = "SF_Wind_v1"
 

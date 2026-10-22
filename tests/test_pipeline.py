@@ -5,10 +5,9 @@ from __future__ import annotations
 
 import bpy
 import pytest
+from conftest import evaluated
 
 from swayfield.core import compat, nodes, spec
-
-from conftest import evaluated
 
 
 def _grass_object(surface):
