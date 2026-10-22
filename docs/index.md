@@ -22,7 +22,7 @@ This is version 0.1.0, the first public release. It runs on Blender 4.2 LTS and 
 ## What you get
 
 - **One-click grass** on any mesh, fully non-destructive.
-- **Rolling Meadow wind**, plus Gentle Breeze, Storm, Rolling Waves and Toon Bob.
+- **Eight wind types**, led by Rolling Meadow.
 - **Effectors**: Vortex, Radial Blast, Trample and Shelter.
 - **Painting and masks**: density, length, wind strength and colour variation, plus slope, altitude, noise, image, proximity and camera-distance masks.
 - **Three material modes**: Procedural, Image Maps and Single Color.

@@ -2,7 +2,7 @@
 
 Dense, long grass is heavy. **Optimised Mode** keeps the viewport interactive while leaving final renders at full quality. It works because Geometry Nodes can tell the viewport from a render, so these savings apply to the viewport only, unless a setting says otherwise.
 
-Turn it on with the **Optimised Mode** toggle in the panel header. Add Grass turns it on automatically if the scene would go over 500,000 blades.
+Turn it on with the **Optimised Mode** toggle near the top of the panel. Add Grass turns it on automatically if the scene would go over 500,000 blades.
 
 ## What Optimised Mode changes
 
@@ -47,12 +47,25 @@ Culling reads the camera lens through hidden inputs that Swayfield keeps in sync
 
 - **Blade counter**: live viewport count and estimated render count per layer and in total.
 - **Budget guard**: default 2 million blades in the viewport. If a change would go over, Swayfield warns you and offers to switch on Optimised Mode or lower density, instead of freezing Blender. Change the budget in the scene settings.
-- **Light first evaluation**: right after Add Grass, grass shows at 10% density as points, then fills in, so a huge mesh does not lock the UI.
+- **Light first evaluation**: right after Add Grass, grass starts as a light points preview at 10% density (lower still on very large surfaces), then fills in, so a huge mesh does not lock the UI.
 - **Simplify**: Swayfield respects Blender's Simplify panel and scales viewport density by its child-particle percentage.
+
+## Indicative measurements
+
+These numbers come from one development machine (Blender 5.2, CPU evaluation of the node tree). They are not frame rates and not guarantees. Your scene and hardware will differ.
+
+| Case | Time |
+| --- | --- |
+| 50 m x 50 m field at 20% viewport density | about 0.1 s |
+| 200 m x 200 m terrain at 20% viewport density | under 1 s |
+| Add Grass on a 60 m field | about 1 s |
+| Full-density render evaluation of about 2 million blades | roughly 15 to 20 s |
+
+In Optimised Mode the viewport places blades at the Viewport Density directly and skips the minimum-distance pass, which is where most of the time goes. That is why the viewport is so much faster than a full-density evaluation. The slow full-density pass is the reason **Bake Scatter** matters for renders.
 
 ## Bake Scatter
 
-Click **Bake Scatter** to cache the static part of the system (blade placement and masks). Only the wind is calculated each frame afterwards. This helps most when you use many masks or a dense surface. The wind itself is not baked. Click **Free Bake** to edit masks or density again.
+Click **Bake Scatter** to cache the static part of the system (blade placement and masks). Only the wind is calculated each frame afterwards. This helps most when you use many masks or a dense surface. Bake Scatter always bakes at full density, even when Optimised Mode is on. The wind itself is not baked. Click **Free Bake** to edit masks or density again.
 
 ## Quick fixes for a slow viewport
 

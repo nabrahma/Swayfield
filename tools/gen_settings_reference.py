@@ -92,7 +92,7 @@ def description(inp) -> str:
     text = inp.description.rstrip(".") + "."
     if inp.items:
         parts = []
-        for ident, label, desc in inp.items:
+        for _ident, label, desc in inp.items:
             parts.append(f"**{label}**" + (f" ({desc.rstrip('.')})" if desc else ""))
         text += " Options: " + "; ".join(parts) + "."
     return cell(text)

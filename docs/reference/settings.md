@@ -12,6 +12,7 @@ Every Swayfield setting is an input of the layer's Geometry Nodes modifier. This
 
 | Setting | Key | Type | Default | Range | Description |
 | --- | --- | --- | --- | --- | --- |
+| Surface | `surface` | Object | none |  | Mesh object the grass grows on. Its modifiers are included. |
 | Seed | `seed` | Integer | 0 | 0 to 1000000 | Random seed for blade placement. |
 | Density | `density` | Float | 800 | 1 to 20000 | Blades per square metre of world-space surface. Scaling the object keeps the look. |
 | Generation Density | `density_ceiling` | Float | 2000 | 1 to 20000 | Blades per square metre generated before thinning. Density, masks and painting thin this set, so blades never reshuffle. Keep it at or a little above Density. |

@@ -11,11 +11,13 @@ Get to the Rolling Meadow look in about 60 seconds.
 
 1. **Select the mesh.** Click it in the viewport.
 2. **Open the Swayfield tab.** Hover over the 3D Viewport and press `N`, then click the **Swayfield** tab.
-3. **Click Add Grass.** A grass layer appears. The first view is light on purpose (reduced density, points) so a large mesh never freezes Blender, and it fills in right after.
-4. **Pick the Rolling Meadow preset** from the preset picker at the top of the panel. This sets blade length, density, material and the hero wind.
+3. **Pick Rolling Meadow** in the **Grass Preset** picker at the top of the panel. It sets blade length, density, material and the hero wind.
+4. **Click Add Grass.** A grass layer appears. The first view is light on purpose (reduced density, points) so a large mesh never freezes Blender, and it fills in right after.
 5. **Press play** (`Space`). Grass leans hard to the right, and bright streaks race across the field.
 
 <!-- TODO: screenshot of the Swayfield panel after step 4 -->
+
+The grass is a separate object named `SF_<surface>_<layer>`, parented to your mesh. It is not selectable by default, so clicking the terrain still picks the terrain. The panel works with either one active.
 
 ## Make your first render look good
 
@@ -25,9 +27,9 @@ Click **Quick Look**. It adds a test camera at 1 m height, a sun, and the AgX Pu
 
 | I want to... | Do this |
 | --- | --- |
-| Change the wind direction | In the **Wind** panel, set **Direction**, or [pick a direction empty](../guide/wind.md#direction) |
-| Try calmer or wilder wind | Change the animation type to Gentle Breeze or Storm |
-| Keep a path free of grass | [Paint Density](../guide/painting-and-masks.md) and paint black |
+| Change the wind direction | In the **Wind** panel, set **Direction**, or [use a direction empty](../guide/wind.md#direction) |
+| Try calmer or wilder wind | Open the **Wind Type** menu and pick Gentle Breeze or Storm |
+| Keep a path free of grass | Click [Paint Density](../guide/painting-and-masks.md) and paint black |
 | Use my own grass textures | [Material mode: Image Maps](../guide/materials.md) |
 | Keep the viewport smooth | Switch on [Optimised Mode](../guide/performance.md) |
 | Make a looping clip | [Seamless loops](../guide/wind.md#seamless-loops-for-social-media) |

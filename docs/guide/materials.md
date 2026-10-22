@@ -12,7 +12,7 @@ Every layer comes with a ready material built on Principled BSDF. Pick a **mater
 
 The default colours are root shadow `#0B3A05`, mid `#3F7A12`, lit tip `#8BD63A` and far haze `#5E8F31`. Roughness is 0.45. A little translucency gives a backlit glow.
 
-- **Wind brightening** blends toward a highlight colour where the grass is bent (default 0.6). Set it to 0 to turn it off.
+- **Wind Brightening** blends toward the Wind Highlight colour where the grass is flattened by wind (default 0.6). Set it to 0 to turn it off.
 - **Distance haze** blends toward the far colour with distance. You set the start and end distance.
 
 ## Image Maps
@@ -21,21 +21,24 @@ The default colours are root shadow `#0B3A05`, mid `#3F7A12`, lit tip `#8BD63A` 
 2. Click **Load Texture Set** and pick a folder.
 3. Swayfield fills the slots by filename suffix.
 
-| Slot | Suffixes it looks for |
+| Slot | File name endings it looks for |
 | --- | --- |
-| Base Color | `_albedo`, `_basecolor`, `_diff` |
-| Roughness | `_rough` |
-| Normal | `_nrm`, `_normal` |
-| Opacity | `_opacity`, `_alpha` |
-| Translucency | `_trans` |
+| Base Color | `_albedo`, `_basecolor`, `_base_color`, `_diffuse`, `_diff`, `_color`, `_colour`, `_col` |
+| Roughness | `_roughness`, `_rough`, `_rgh` |
+| Normal | `_normal`, `_nrm`, `_norm`, `_nor`, `_normalgl`, `_normal_gl` |
+| Opacity | `_opacity`, `_alpha`, `_mask` |
+| Translucency | `_translucency`, `_trans`, `_sss` |
+| AO | `_ao`, `_occlusion`, `_ambientocclusion`, `_ambient_occlusion` |
 
-Other names may work too, such as `_ao` for the AO slot. If a slot is not filled, set it by hand.
+The ending may be followed by a qualifier, such as `grass_albedo_2k.png`.
 
-If your set has an opacity map, Swayfield switches the blade source to **Ribbons** for you, because opacity needs flat blades with UVs.
+Each slot also has a **pick image** button and, once filled, a **clear** button, so you can set or fix single slots by hand. Empty slots fall back to neutral values (the procedural colour, the Roughness control, a flat normal, fully opaque, no AO), so a missing map never turns blades black or transparent.
+
+If **Load Texture Set** finds an opacity map, Swayfield switches the blade source to **Ribbons** for you, because opacity needs flat blades with UVs.
 
 The image is tinted by the same root-to-tip gradient and wind brightening as the procedural look. Each has a strength slider, and 0 means the raw texture.
 
-Swayfield ships two CC0 texture sets, a grass blade and a short lawn tuft, that you can use as they are.
+Swayfield ships two CC0 texture sets, a grass blade and a short lawn tuft (in the add-on's `textures` folder), that you can use as they are.
 
 ## Single Color
 
@@ -43,7 +46,7 @@ Pick a colour. **Variation** (0 to 1) adds random difference between blades. Set
 
 ## Painted colour variation
 
-Use **Paint Color Variation** (see [Painting and masks](painting-and-masks.md#other-maps)) to add dry or yellow patches. The painted map feeds the secondary tint.
+Use **Paint Variation** (see [Painting and masks](painting-and-masks.md#other-maps)) to add dry or yellow patches. The painted map feeds the secondary tint.
 
 ## Attributes for your own shaders
 
@@ -52,7 +55,7 @@ Swayfield writes these attributes onto the grass. Read them with an **Attribute*
 | Attribute | Range | Meaning |
 | --- | --- | --- |
 | `sf_factor` | 0 to 1 | Position along the blade, root to tip |
-| `sf_wind` | 0 to 1 | Current bend amount from wind. Drives brightening |
+| `sf_wind` | 0 to 1 | Flattening beyond the steady lean: 0 at rest, 1 fully flattened by a gust or effector. Drives brightening |
 | `sf_random` | 0 to 1 | Stable random value per blade |
 | `sf_variation` | 0 to 1 | Painted or noise colour-variation mask |
 | `sf_clump` | 0 to 1 | Random value per clump, for patchy colour |

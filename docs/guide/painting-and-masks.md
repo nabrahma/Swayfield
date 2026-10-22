@@ -5,10 +5,10 @@ Control where grass grows, how long it is and where wind is weaker. You paint wi
 ## Paint workflow
 
 1. Select the mesh and the layer you want to edit.
-2. In the **Masks** panel, click **Paint Density**.
+2. In the **Masks** panel, click **Paint Density**. (The surface or its grass object can be active.)
 3. Swayfield creates a vertex group named `SF_<layer>_density`, filled with weight 1.0 so nothing disappears. It links the group to the layer and switches to Weight Paint mode.
 4. Paint with the normal brushes. **Black removes grass, white restores it, grey thins it.** The grass updates as you paint. In Optimised Mode it shows as points while you paint, for speed.
-5. Click **Done** to return to Object mode.
+5. Click **Done** (it appears while you are in Weight Paint mode) to return to Object mode.
 
 <!-- TODO: GIF of painting a path through a field -->
 
@@ -20,8 +20,8 @@ Weight 0.3 keeps about 30% of the blades. Because blades are thinned from a fixe
 | --- | --- | --- |
 | **Paint Density** | How many blades grow | Paths, bare patches |
 | **Paint Length** | Blade length | Mown paths, longer grass at field edges |
-| **Paint Wind Strength** | How strongly wind affects the grass | Shelter behind walls and rocks |
-| **Paint Color Variation** | The material's secondary tint | Dry or yellow patches |
+| **Paint Wind** | How strongly wind affects the grass | Shelter behind walls and rocks |
+| **Paint Variation** | The material's secondary tint | Dry or yellow patches |
 
 Each map has its own vertex group (`SF_<layer>_length`, `_wind`, `_variation`). You can also pick any existing vertex group from the dropdown.
 
@@ -34,11 +34,11 @@ Every painted map has three sliders:
 - **Threshold**: weights below this value become 0.
 
 !!! note "Few vertices?"
-    Weights are painted on vertices, so a surface with big polygons gives coarse results. If the surface has fewer than about one vertex per 25 cm, the panel shows a note with a one-click **Subdivide** suggestion. It adds a Subdivision modifier ahead of Swayfield so painting gets finer. For very low-poly surfaces, subdivide first, or use an Image mask. (Texture-paint masks are not in 0.1.0.)
+    Weights are painted on vertices, so a surface with big polygons gives coarse results. If the surface has fewer than about one vertex per 25 cm, the panel shows a note with a one-click **Subdivide** suggestion. It subdivides the mesh itself, so it changes your surface for good (undo works). For very low-poly surfaces, subdivide first, or use an Image mask. (Texture-paint masks are not in 0.1.0.)
 
 ## The mask stack
 
-Masks stack like layers. You can mix painting, slope and noise without touching nodes. Each mask has an enable toggle and a **Blend** mode that says how it combines with the masks above it.
+Masks stack like layers. You can mix painting, slope and noise without touching nodes. Click **Add Mask** and pick a mask from the menu. Each active mask gets a box with its settings, an enable toggle and a **Blend** mode that says how it combines with the masks above it.
 
 | Blend | Result |
 | --- | --- |
@@ -49,7 +49,7 @@ Masks stack like layers. You can mix painting, slope and noise without touching 
 
 Available masks:
 
-- **Vertex Group** (the painted maps above)
+- **Painted maps** (Density, Length, Wind and Variation above) show their group, Invert, Contrast and Threshold once a map is in use
 - **Slope**: grass grows between a minimum and maximum surface angle, with a smooth transition.
 - **Altitude**: grass grows between a minimum and maximum world height.
 - **Noise**: patchy coverage. Set scale, contrast, coverage and seed.

@@ -20,7 +20,7 @@ Behind the scenes Swayfield generates blades once at **Generation Density** (def
 | **Ribbons** | Flat tapered mesh strips with UVs (U across the blade, V from root 0 to tip 1) | Image textures with opacity, close-ups |
 | **Custom Instances** | Your own meshes from a collection, kept instanced | Photoscanned tufts, flowers, stylised grass |
 
-For Custom Instances, put your meshes in a collection and pick it as the **Instance Collection**. Use **Instance Scale Min** and **Max** for size variety. By default each mesh keeps its own material. Turn on **Override Instance Material** to use the layer material instead.
+For Custom Instances, put your meshes in a collection and pick it as the **Instance Collection**. Use **Instance Scale Min** and **Max** for size variety. Instances are picked evenly. Weighted picking is planned. By default each mesh keeps its own material. Turn on **Override Instance Material** to use the layer material instead.
 
 ## Blade shape
 
@@ -42,8 +42,8 @@ For Custom Instances, put your meshes in a collection and pick it as the **Insta
 
 ## Other modifiers on the surface
 
-Swayfield works on the evaluated surface, so modifiers such as Subdivision or Displace change where grass grows. Blender runs the modifier stack from top to bottom, so put those modifiers **above** the Swayfield modifier if you want the grass to follow the final shape.
+Swayfield reads the surface through the modifier's Surface input, and that includes **all** of the surface's own modifiers. A Subdivision or Displace modifier on your terrain changes where grass grows, wherever it sits in the terrain's stack. There is nothing to reorder.
 
 ## Bake Scatter
 
-Heavy masks can be slow to re-evaluate. **Bake Scatter** caches the static half (placement and masks) so only the wind is calculated each frame. Use **Free Bake** to clear it, for example before you repaint.
+Heavy masks can be slow to re-evaluate. **Bake Scatter** caches the static half (placement and masks) so only the wind is calculated each frame. Bake Scatter always bakes at full density, even when Optimised Mode is on. Use **Free Bake** to clear it, for example before you repaint.

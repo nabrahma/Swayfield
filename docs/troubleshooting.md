@@ -17,7 +17,7 @@ See [Performance](guide/performance.md).
 - **The vertex group is empty or wrong.** Check that the right group is linked in the Masks panel. A new group starts at weight 1.0.
 - **Threshold or Invert is set.** A high Threshold zeroes light weights. Invert flips painted and unpainted areas.
 - **A mask is hiding it.** Check Slope, Altitude, Noise and the other masks. Each enabled mask must allow grass.
-- **The surface has few vertices.** Weights are per vertex, so a coarse mesh gives coarse results. Use the Subdivide suggestion.
+- **The surface has few vertices.** Weights are per vertex, so a coarse mesh gives coarse results. Use the **Subdivide** button in the note (it subdivides the mesh itself).
 - **A bake is active.** Click **Free Bake** after changing masks.
 
 ## Blades pop in at the frame edges
@@ -34,7 +34,7 @@ These are the LOD bands. Raise **Near Distance** and **Mid Distance**, increase 
 
 ## I opened a file and there is no Swayfield panel
 
-The file was made with Swayfield and the add-on is not installed or enabled here. The grass still works and renders. Settings are in the Geometry Nodes modifier on the object. Install Swayfield to get the full panel.
+The file was made with Swayfield and the add-on is not installed or enabled here. The grass still works and renders. Settings are in the Geometry Nodes modifier on the grass object (`SF_<surface>_<layer>`). Install Swayfield to get the full panel.
 
 ## The wind does not move
 
@@ -45,6 +45,10 @@ The file was made with Swayfield and the add-on is not installed or enabled here
 ## The wind blows the wrong way
 
 Change **Direction**, or use a direction empty. 0° blows toward +X. Rolling Meadow reads as left to right for a camera looking along +Y.
+
+## I click the terrain and cannot select the grass
+
+That is on purpose. Grass objects are not selectable by default, so clicking the terrain picks the terrain. The Swayfield panel works with the terrain active. To reach the grass object, use the Outliner.
 
 ## Add Grass says to select a mesh
 

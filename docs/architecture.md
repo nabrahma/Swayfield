@@ -193,6 +193,11 @@ size and fit, shift, orthographic scale and render resolution into the hidden
 background renders. `cull_fov_override` is the fallback when drivers cannot be
 used.
 
+Drivers exist only while the scene has a camera. `drivers.check_cameras()`
+adds or removes them, and a light timer (about once a second) only compares
+camera identity and calls it, because a driver whose path fails never
+recovers.
+
 ## Materials
 
 `core/materials.py` builds one material per layer whose node tree holds all
@@ -248,10 +253,17 @@ SF_Layer
     preset          grass preset id, or "CUSTOM"
     wind_preset     wind type id, or "CUSTOM"
     link_id         shared by layers created together on several objects
+    grass_object    the hair Curves object that carries the modifier
+    solo            this layer is soloed
+    hidden_by_solo  this layer was hidden by another layer's solo
+    paint_restore_display  display mode to restore after painting (-1 = none)
     + enum proxies  one EnumProperty per INT input with items (blade_source,
                     display_mode, sway_mode, *_blend, cam_sensor_fit) and
                     material_mode, implemented with get/set on the modifier or
                     material, so no value is stored twice
+Object custom properties (not part of the PropertyGroups)
+    sf_grass          set on grass Curves objects
+    sf_effector_type  set on effector objects
 Scene.swayfield: SF_SceneSettings
     budget                  viewport blade budget (default 2,000,000)
     auto_optimise_threshold blades above which Add Grass turns on Optimised Mode (500,000)
@@ -261,18 +273,21 @@ Scene.swayfield: SF_SceneSettings
 
 | bl_idname | Does |
 | --- | --- |
-| `swayfield.add_grass` | add a layer to every selected mesh (`preset` property) |
+| `swayfield.add_grass` | add a layer to every selected mesh (`preset` property). The first evaluation starts as a light points preview, and on very large surfaces the density is scaled down further for that first pass |
 | `swayfield.layer_add` / `layer_duplicate` / `layer_remove` / `layer_move` | layer list editing |
+| `swayfield.layer_solo` | show only one layer in the viewport (click again to show all) |
 | `swayfield.paint` | create or reuse `SF_<layer>_<map>` and enter Weight Paint (`map`: DENSITY, LENGTH, WIND, VARIATION) |
 | `swayfield.paint_done` | back to Object mode |
-| `swayfield.subdivide_surface` | add a Subdivision modifier below Swayfield for cleaner painting |
+| `swayfield.subdivide_surface` | subdivide the surface mesh itself (not a modifier) for cleaner painting |
 | `swayfield.apply_preset` / `apply_wind_preset` | fill inputs from a preset |
 | `swayfield.save_preset` / `delete_preset` | user presets in the config folder |
 | `swayfield.add_effector` | add a Vortex, Radial Blast, Trample or Shelter effector |
 | `swayfield.add_exclusion` | add selected objects to the layer's exclusion collection |
 | `swayfield.add_direction_empty` | create and link a wind direction empty |
-| `swayfield.bake_scatter` / `free_bake` | bake or free the static half |
+| `swayfield.bake_scatter` / `free_bake` | bake or free the static half. The bake holds Optimised Mode off and Simplify at 1, so it always bakes at full density |
 | `swayfield.load_texture_set` | fill image slots from a folder by filename suffix |
+| `swayfield.pick_image` / `clear_image` | set or clear one image slot of the layer material |
+| `swayfield.select_object` | select an effector object from the panel |
 | `swayfield.quick_look` | test camera at 1 m, sun, AgX Punchy |
 | `swayfield.upgrade_layer` | migrate a layer to the newest group version |
 | `swayfield.sync_linked` | copy settings to layers sharing a `link_id` |

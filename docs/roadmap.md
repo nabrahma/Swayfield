@@ -13,6 +13,9 @@ Swayfield 0.1.0 has all the must-have features from the product plan and most of
 
 ## Smaller items
 
+- **Weighted instance picking**: choose how often each mesh in a Custom Instances collection is used.
+- **Preset buttons**: panel buttons to save, apply and delete presets.
+
 - **Pause wind while navigating**: freeze wind while you orbit or paint.
 - **Trample recovery time**: let grass stand back up slowly after a Trample effector moves away.
 

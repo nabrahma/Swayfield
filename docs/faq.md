@@ -6,7 +6,7 @@ Blender 4.2 LTS and newer. It was tested on Blender 5.2 LTS, and 4.2 LTS is veri
 
 ## Do I need Swayfield installed to render a file?
 
-No. Node groups and materials are saved inside the .blend, so the file opens and renders on any machine, including render farms. Without the add-on you can still change settings in the modifier panel. You just do not get the Swayfield sidebar.
+No. Node groups and materials are saved inside the .blend, so the file opens and renders on any machine, including render farms. The grass is a hair Curves object with a Geometry Nodes modifier, so without the add-on you can still change settings in the modifier panel. You just do not get the Swayfield sidebar.
 
 ## Does it work with Cycles and EEVEE?
 

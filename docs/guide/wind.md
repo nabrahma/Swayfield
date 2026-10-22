@@ -14,7 +14,7 @@ Every frame, each blade asks the wind field "which way and how hard am I being p
 
 The blade then bends by rotating around its root, so it never gets shorter. The bend is stiff near the root and loose near the tip (**Stiffness**), and tips lag slightly behind the root in time (**Tip Lag**), like real stems.
 
-The amount of bend is stored in the `sf_wind` attribute. The material uses it to brighten bent grass, which is why flattened crests glow.
+The `sf_wind` attribute stores how far a blade is flattened beyond the steady lean: 0 means resting at the steady lean, 1 means fully flattened by a gust or effector. The material uses it to brighten flattened grass, so gust crests glow while the rest of the field stays dark.
 
 ## Rolling Meadow
 
@@ -40,7 +40,7 @@ Use a camera looking along +Y so that the wind blows from left to right on scree
 
 ## Animation types
 
-Pick one from the **Wind** panel. Selecting a type fills the sliders. If you then change a slider, the type shows as **Custom**.
+Open the **Wind Type** menu in the **Wind** panel. Selecting a type fills the sliders. If you then change a slider, the type shows as **Custom**.
 
 | Type | Look |
 | --- | --- |
@@ -48,27 +48,30 @@ Pick one from the **Wind** panel. Selecting a type fills the sliders. If you the
 | **Gentle Breeze** | Calm sway, small slow gusts, upright grass |
 | **Storm** | Violent and turbulent, with the direction wandering by up to 30° |
 | **Rolling Waves** | Regular parallel rows, a stylised or anime look. Adjust wavelength and speed |
+| **Vortex** | Grass swirls around a point. Goes with a Vortex [effector](effectors.md) |
+| **Radial Blast** | Grass is flattened outward. Goes with a Radial Blast effector |
+| **Trample Path** | Grass parts around a moving object. Goes with a Trample effector |
 | **Toon Bob** | Whole blades rock without bending. Cheap and stylised |
 
-Vortex, Radial Blast, Trample and Shelter are [effectors](effectors.md). You can add any number of them on top of any wind type.
+Vortex, Radial Blast and Trample Path are wind types that pair with an effector of the same kind. If the layer has none, Swayfield tells you to add one. The effectors themselves are separate objects (Vortex, Radial Blast, Trample and Shelter), and you can add any number of them on top of any wind type.
 
 ## Controls
 
 - **Intensity** (0 to 2) scales all wind at once. Keyframe it for gusty shots.
 - **Time Offset** and **Speed Multiplier** make layers move out of step.
-- **Direction Variation** and **Variation Speed** let the direction wander. Storm uses this.
+- The **Direction Variation** sub-panel (**Direction Variation** and **Variation Speed**) lets the direction wander. Storm uses this.
 - **Sway Mode**: Bend, or Rigid (whole blades rock).
 - **Gust Evolution** and **Gust Contrast** change how fast the gust shapes change and how sharp the streaks are.
 
 ### Direction
 
-**Direction** is an angle around the world's up axis. 0° blows toward +X. For animated direction, click **Add Direction Empty** and rotate the empty. Its local X axis sets the wind, so you can keyframe its rotation.
+**Direction** is an angle around the world's up axis. 0° blows toward +X. For animated direction, click **Add Direction Empty** and rotate the new empty around Z. Its local X axis sets the wind, so you can keyframe its rotation.
 
 ## Seamless loops for social media
 
 To make a loop, for example 240 frames:
 
-1. In the **Wind** panel, turn on **Loop**.
+1. In the **Wind** panel, open the **Loop** sub-panel and turn on **Loop**.
 2. Set **Loop Length** to 240.
 3. Set your scene's frame range to 1 to 240.
 4. Render.
@@ -80,7 +83,7 @@ Frame 241 would match frame 1, so the clip repeats with no jump. Loop mode works
 
 ## Freeze and Mute
 
-- **Freeze Wind** holds the wind still at the current **Time Offset**. Use it to pose a still frame.
+- **Freeze Wind** (the **Freeze** toggle) holds the wind still at the current **Time Offset**. Use it to pose a still frame.
 - **Mute in Viewport** turns wind off in the viewport only, for speed. Renders keep wind.
 
 ## Shelter
